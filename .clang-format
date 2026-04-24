@@ -1,0 +1,15 @@
+Language: Cpp
+
+BasedOnStyle: Google
+IndentWidth: 2
+ColumnLimit: 90
+SortIncludes: true
+FixNamespaceComments: true
+AlignAfterOpenBracket: Align
+AllowShortFunctionsOnASingleLine: Inline
+DerivePointerAlignment: false
+IndentCaseLabels: false
+PointerAlignment: Right
+BinPackArguments: false
+BinPackParameters: false
+NamespaceIndentation: All
