@@ -9,6 +9,8 @@ set(SOURCES
   src/main.cpp
   src/engine/camera.cpp
   src/engine/shader_utils.cpp
+  src/engine/parser.cpp
+  src/engine/mesh.cpp
   src/utils/glad.c
 )
 

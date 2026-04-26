@@ -5,14 +5,18 @@
 #include <algorithm>
 #include <cmath>
 #include <vector>
+#include <iostream>
 
 #include "engine/camera.h"
 #include "engine/shader_utils.h"
+#include "engine/mesh.h"
+#include "engine/parser.h"
 #include "math/constants.h"
 #include "math/matrix.h"
 #include "math/opengl_utils.h"
 #include "math/vector.h"
 #include "math/vector_ops.h"
+
 
 namespace {
 
@@ -275,6 +279,16 @@ int main() {
   glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void *)0);
   glEnableVertexAttribArray(0);
 
+  //Carrega mesh de teste
+  unsigned int objShaderProgram = createShaderProgram("data/shaders/shader.vert","data/shaders/shader.frag");
+  if (objShaderProgram == 0) return 1;
+  std::vector<Vertex> objVertices;
+  if(!Parser("data/models/teste.obj", objVertices)) {
+    std::cout << "ERRO: Nao encontrou data/models/teste.obj" << std::endl;
+    return 1;
+}
+  Mesh teste(objVertices);
+
   Camera cam;
   Vector<3> cameraPosition{0.0f, 2.0f, 5.0f};
 
@@ -311,18 +325,40 @@ int main() {
     auto glView = toOpenGLMatrix(view);
     auto glProj = toOpenGLMatrix(projection);
 
+    glUseProgram(objShaderProgram);
+    unsigned int objViewLoc = glGetUniformLocation(objShaderProgram, "view");
+    unsigned int objProjLoc = glGetUniformLocation(objShaderProgram, "projection");
+    unsigned int objModelLoc = glGetUniformLocation(objShaderProgram, "model");
+
+    glUniformMatrix4fv(objViewLoc, 1, GL_FALSE, glView.data());
+    glUniformMatrix4fv(objProjLoc, 1, GL_FALSE, glProj.data());
+
+    float matrixIdentidade[16] = {
+        1.0f, 0.0f, 0.0f, 0.0f,
+        0.0f, 1.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, 1.0f, 0.0f,
+        0.0f, 0.0f, 0.0f, 1.0f
+    };
+    glUniformMatrix4fv(objModelLoc, 1, GL_FALSE, matrixIdentidade);
+
+    teste.Draw();
+
+    glUseProgram(shaderProgram);
+
     unsigned int viewLoc = glGetUniformLocation(shaderProgram, "view");
     unsigned int projLoc = glGetUniformLocation(shaderProgram, "projection");
 
     glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glView.data());
     glUniformMatrix4fv(projLoc, 1, GL_FALSE, glProj.data());
 
+    glBindVertexArray(VAO);
     glDrawArrays(GL_LINES, 0, grid.size() / 3);
 
     glfwSwapBuffers(window);
     glfwPollEvents();
   }
 
+  glDeleteProgram(objShaderProgram);
   glDeleteProgram(shaderProgram);
   glDeleteBuffers(1, &VBO);
   glDeleteVertexArrays(1, &VAO);
