@@ -1,97 +1,81 @@
 # Especificação da Implementação
 
-> [!CAUTION]
-> - Você <ins>**não pode utilizar ferramentas de IA para escrever esta
->   especificação**</ins>
-
 ## Integrantes da dupla
 
-- **Aluno 1 - Nome**: <mark>`<preencher>`</mark>
-- **Aluno 1 - Cartão UFRGS**: <mark>`<preencher>`</mark>
+- **Aluno 1 - Nome**: Caetano Meneghetti
+- **Aluno 1 - Cartão UFRGS**: 00591004
 
-- **Aluno 2 - Nome**: <mark>`<preencher>`</mark>
-- **Aluno 2 - Cartão UFRGS**: <mark>`<preencher>`</mark>
+- **Aluno 2 - Nome**: Fernando Tedesco
+- **Aluno 2 - Cartão UFRGS**: 00591001
 
 ## Detalhes do que será implementado
 
-- **Título do trabalho**: <mark>`<preencher>`</mark>
-- **Parágrafo curto descrevendo o que será implementado**: <mark>`<preencher>`</mark>
+- **Título do trabalho**: 1346AD: Iron & Blood
+- **Parágrafo curto descrevendo o que será implementado**: O trabalho será um jogo 3D no estilo tower defense (mecânicas inspiradas no Bloons TD 6) com a temática medieval. O cenário será baseado em assets com malhas poligonais complexas baseado no jogo Total War: Medieval II. O jogador terá a função lançar feitiços e posicionar unidades aliadas a fim de defender um castelo de ondas/hordas de inimigos. A aplicação vai simular o avanço de tropas inimigas por rotas pré-definidas e animações baseadas na velocidade de cada inimigo. O combate será gerido pela intersecção de elementos como projéteis (flechas e balas) e espadas, onde cada aliado e inimigo possui suas características e habilidades, possibilitando criar variações com inimigos mais fortes para criar fases mais difíceis.
 
 ## Especificação visual
 
-### Vídeo - Link
+### Vídeo
 
-> [!IMPORTANT]
-> - Coloque aqui um link para um vídeo que mostre a aplicação gráfica
->   de referência que você vai implementar. **Sua implementação deverá
->   ser o mais parecido possível com o que é mostrado no vídeo (mais
->   detalhes abaixo).**
-> - **Você não pode escolher como referência: (1) algum trabalho realizado
->   por outros alunos desta disciplina, em semestres anteriores. (2) Minecraft.**
-> - Por exemplo, você pode colocar um vídeo de um jogo que você gosta,
->   e seu trabalho final será uma re-implementação do jogo.
-> - O vídeo pode ser um link para YouTube, Google Drive, ou arquivo mp4 dentro
->   do próprio repositório. Mas, garanta que qualquer um tenha
->   permissão de acesso ao vídeo através deste link.
+Como estamos criando um jogo do zero, não conseguimos utilizar um vídeo de referência. Portanto, fizemos um vídeo utilizando ferramentas de IA que reflete bem o que desejamos implementar. O vídeo está dentro da pasta "Spec", e tem o nome de "demo_ia_tower_defense.mp4".
+Por limitação das ferramentas, só conseguímos gerar um vídeo com resultado satisfatório de 10 segundos.
 
-<mark>`<preencher>`</mark>
+Abaixo seguem vídeos auxiliares, mas o vídeo principal e que reflete o que queremos fazer é o dito acima.
 
-### Vídeo - Timestamp
+#### Vídeo auxiliar - link e timestamp
 
-> [!IMPORTANT]
-> - Coloque aqui um **intervalo de ~30 segundos** do vídeo acima, que
->   será a base de comparação para avaliar se o seu trabalho final
->   conseguiu ou não reproduzir a referência.
-
-- **Timestamp inicial**: <mark>`<preencher>`</mark>
-- **Timestamp final**: <mark>`<preencher>`</mark>
+Uma ideia geral do jogo pode ser vista em vídeos das fases simples de Bloons TD 6, como em
+https://www.youtube.com/watch?v=gBeI4md2ixE&t=189s, no minuto **2:00**. A temática será bem diferente, seguindo o jogo Total War: Medieval II como referência gráfica. As imagens exemplificam melhor isso.
 
 ### Imagens
 
-> [!IMPORTANT]
-> - Coloque aqui **três imagens** capturadas do vídeo acima, que você
->   irá usar como ilustração para as explicações que vêm abaixo.
+Imagem 1:
+![](Spec/imagem1.png)
+Mecânicas e funcionalidades:
 
-<mark>`<preencher>`</mark>
+Imagem 2:
+![](Spec/imagem2.png)
+Cenário principal:
+
+Imagem 3:
+![](Spec/imagem3.png)
+Meshes e texturas das unidades aliadas que serão utilizadas. No nosso jogo, cada entidade será de um tipo diferente (extraídas do jogo Total War: Medieval II).
 
 ## Especificação textual
 
-Para cada um dos requisitos abaixo (detalhados no [Enunciado do Trabalho final - Moodle](https://moodle.ufrgs.br/mod/assign/view.php?id=6018620)), escreva um parágrafo **curto** explicando como este requisito será atendido, apontando itens específicos do vídeo/imagens que você incluiu acima que atendem estes requisitos.
-
 ### Malhas poligonais complexas
-<mark>`<preencher>`</mark>
+A grande maioria das malhas poligonais utilizadas no jogo serão extraídas do jogo Total War: Medieval II. o processo consiste em converter os arquivos binários de mesh do próprio jogo (.mesh) para formatos legíveis ao blender (.glb) por meio de ferramentas da comunidade (IWTE), possibilitando a manipulação das malhas e texturas no blender, para que no fim seja possível animar, além de manualmente no próprio blender, com ferramentas do tipo Mixamo e Accurig. Os arquivos finais, do tipo .fbx, serão lidos e interpretados por meio de um parser de uma lib (Assimp ou Autodesk FBX SDK).
 
 ### Transformações geométricas controladas pelo usuário
-<mark>`<preencher>`</mark>
+O jogador usará o mouse para mover um modelo 3D da unidade "fantasma" antes de posicionar ela no campo de batalha, com as coordenadas X,Z atualizadas constantemente. Também será possível a rotação de construções e unidade em torno do seu eixo Y.
 
 ### Diferentes tipos de câmeras
-<mark>`<preencher>`</mark>
+O jogo terá uma câmera look-at orbital para abrir o HUD de uma unidade específica, uma câmera livre para visualização do cenário e uma câmera look-at fixa em cima do cenário para o jogador desenhar feitiços.
 
 ### Instâncias de objetos
-<mark>`<preencher>`</mark>
+Teremos os objetos das entidades aliadas (múltiplas instâncias, 5 entidades diferentes), objetos das entidades inimigas (múltiplas instâncias, 5 entidades de inimigos diferentes), e os objetos do cenário (chão, terra, árvores, pedras, etc.) e objetos de iluminação (fontes de luz como tochas e fogo)
 
 ### Testes de intersecção
-<mark>`<preencher>`</mark>
+Será utilizado o método bounding-box para a checagem de colisão entre os inimigos e projéteis, e também para checar se o inimigo chegou em uma distância de combate com aliados.
 
 ### Modelos de Iluminação em todos os objetos
-<mark>`<preencher>`</mark>
+Será utilizado o termo especular (Blinn-Phong), termo ambiente e termo difuso (Lambert).
 
 ### Mapeamento de texturas em todos os objetos
-<mark>`<preencher>`</mark>
+Os modelos 3D dos soldados terão texturas  mapeadas para reprentar detalhes como a malha de aço da armadura, brasões de nações, e outras características. As texturas serão extraídas de maneira semelhante as malhas poligonais (arquivo .texture do jogo alvo -> .dds -> .png), o mapeamento UV dos assets é desconexo, portanto, será realizado o mapeamento e configuração manual da textura para o modelo.
 
 ### Movimentação com curva Bézier cúbica
-<mark>`<preencher>`</mark>
+Serão utilizadas curvas de Catmull-Rom para definir o caminho padrão que os inimigos devem traçar até o objetivo.
 
 ### Animações baseadas no tempo ($\Delta t$)
-<mark>`<preencher>`</mark>
+Os inimigos terão movimentação com velocidade fixa ao longo do caminho definido pelas curvas, seguindo a especificação do trabalho de atrelar a velocidade das animações a um valor Δt fixo.
 
 ## Limitações esperadas
 
-> [!IMPORTANT]
-> - Coloque aqui uma lista de detalhes visuais ou de interação que
->   aparecem no vídeo e/ou imagens acima, mas que você **não pretende
->   implementar** ou que você **irá implementar parcialmente**.
-> - Para cada item, **explique por que** não será implementado ou por
->   que será implementado parcialmente.
-
-<mark>`<preencher>`</mark>
+**Serão feitas parcialmente** as seguintes funcionalidades presentes na documentação visual:
+- Partículas (Podem ser implementadas como efeitos simples de texturas fixas e triviais, mas não será algo avançado a ponto de ser um dos principais elementos visuais do jogo como na imagem e vídeo)
+**Não serão feitas** as seguinte funcionalidades presentes na documentação visual:
+- As texturas e meshes do jogo serão extraídas do jogo Total War: Medieval II, portanto, o estilo visual do jogo será diferente e não cartoon/low poly como está nas imagens e vídeo.
+- O caminho dos inimigos será feito de terra ao invés de pedras, como está nas imagens e vídeo.
+- Os feitiços serão desenhados no mapa do jogo e não em um lugar qualquer como na imagem 1, célula 9.
+- Não vai ter uma unidade que utiliza um lança-chamas (as unidades terão arcos, armas ou espadas)
