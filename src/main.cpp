@@ -5,6 +5,7 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <iostream>
 #include <vector>
 
@@ -36,194 +37,527 @@ namespace {
   constexpr float kNearPlane = 0.1f;
   constexpr float kFarPlane = 100.0f;
   constexpr char kWindowTitle[] = "Tower Defense";
-  constexpr char kVertexShaderPath[] = "data/shaders/grass.vert";
-  constexpr char kFragmentShaderPath[] = "data/shaders/grass.frag";
 
-  struct AppConfig {
+  struct AppState {
+    // Modo de câmera
     bool useFreeCamera = false;
     bool cPressed = false;
     bool showCurve = false;
     bool tPressed = false;
-  };
 
-  struct MouseState {
+    // Câmera livre
     float yaw = -math_constants::kHalfPi;
     float pitch = 0.0f;
     float lastX = kWindowWidth / 2.0f;
     float lastY = kWindowHeight / 2.0f;
     bool firstMouse = true;
+
+    // Câmera orbital
+    float orbitYaw = 0.0f;
+    float orbitPitch = math_constants::kPi / 6.0f;
+    float orbitRadius = 10.0f;
+
+    // Tamanho atual do framebuffer (atualizado pelo resize callback)
+    int fbWidth = kWindowWidth;
+    int fbHeight = kWindowHeight;
   };
 
-  struct OrbitalState {
-    float yaw = 0.0f;
-    float pitch = math_constants::kPi / 6.0f;
-    float radius = 10.0f;
+  struct GroundUniforms {
+    GLint view;
+    GLint projection;
+    GLint grass;
+    GLint noise;
+
+    GroundUniforms(GLint v, GLint p, GLint g, GLint n)
+      : view(v), projection(p), grass(g), noise(n) {}
   };
 
-  // Usamos o prefixo 'g' para denotar valores globais
-  AppConfig gAppConfig;
-  MouseState gMouse;
-  OrbitalState gOrbital;
+  struct ObjUniforms {
+    GLint view;
+    GLint projection;
+    GLint model;
+
+    ObjUniforms(GLint v, GLint p, GLint m)
+      : view(v), projection(p), model(m) {}
+  };
+
+  struct PathUniforms {
+    GLint view;
+    GLint projection;
+    GLint model;
+    GLint dirt;
+    GLint noise;
+
+    PathUniforms(GLint v, GLint p, GLint m, GLint d, GLint n)
+    : view(v), projection(p), model(m), dirt(d), noise(n) {}
+  };
+
+  struct LineUniforms {
+    GLint view;
+    GLint projection;
+
+    LineUniforms(GLint v, GLint p)
+      : view(v), projection(p) {}
+  };
+
+  struct GpuMesh {
+    unsigned int vao = 0;
+    unsigned int vbo = 0;
+    GLsizei vertexCount = 0;
+  };
+
+  AppState &stateFromWindow(GLFWwindow *window) {
+    return *static_cast<AppState *>(glfwGetWindowUserPointer(window));
+  }
+
+  unsigned int loadTexture(const char *path, int forcedChannels = 0) {
+    unsigned int tex;
+    glGenTextures(1, &tex);
+    glBindTexture(GL_TEXTURE_2D, tex);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    // Alinhamento 1 cobre texturas com largura "estranha" (alguns JPGs).
+    // Restauramos para 4 ao final para não afetar uploads futuros.
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+
+    int w, h, channels;
+    unsigned char *data = stbi_load(path, &w, &h, &channels, forcedChannels);
+
+    if (!data) {
+      std::cout << "ERRO: Falha ao carregar a textura " << path << std::endl;
+      glDeleteTextures(1, &tex);
+      glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+      return 0;
+    }
+
+    const int actualChannels = (forcedChannels != 0) ? forcedChannels : channels;
+    const GLenum format = (actualChannels == 4) ? GL_RGBA : GL_RGB;
+
+    glTexImage2D(GL_TEXTURE_2D, 0, format, w, h, 0, format, GL_UNSIGNED_BYTE, data);
+    glGenerateMipmap(GL_TEXTURE_2D);
+    stbi_image_free(data);
+
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+    return tex;
+  }
+
+  // Cria um plano [-20, 20] no XZ com UVs, usado como chão de grama.
+  GpuMesh createGrassMesh() {
+    GpuMesh m;
+    // clang-format off
+    static const float vertices[] = {
+    // X,     Y,     Z,        U,      V
+      // Primeiro triângulo
+      -20.0f, 0.0f, -20.0f,     0.0f,  20.0f,  // Trás esquerda
+       20.0f, 0.0f, -20.0f,    20.0f,  20.0f,  // Trás direita
+      -20.0f, 0.0f,  20.0f,     0.0f,   0.0f,  // Frente esquerda
+      // Segundo triângulo
+       20.0f, 0.0f, -20.0f,    20.0f,  20.0f,  // Trás direita
+       20.0f, 0.0f,  20.0f,    20.0f,   0.0f,  // Frente direita
+      -20.0f, 0.0f,  20.0f,     0.0f,   0.0f,  // Frente esquerda
+    };
+    // clang-format on
+
+    glGenVertexArrays(1, &m.vao);
+    glGenBuffers(1, &m.vbo);
+    glBindVertexArray(m.vao);
+    glBindBuffer(GL_ARRAY_BUFFER, m.vbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void *)0);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(
+        1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void *)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+
+    m.vertexCount = 6;
+    return m;
+  }
+
+  // Cria a mesh da curva-guia (line strip). Apenas posição (3 floats).
+  GpuMesh createCurveMesh(const std::vector<Point> &curvePoints) {
+    GpuMesh m;
+    std::vector<float> data;
+    data.reserve(curvePoints.size() * 3);
+    for (const Point &p : curvePoints) {
+      data.push_back(p.x);
+      data.push_back(0.1f);  // Acima do chão para evitar z-fighting com a grama
+      data.push_back(p.y);
+    }
+
+    glGenVertexArrays(1, &m.vao);
+    glGenBuffers(1, &m.vbo);
+    glBindVertexArray(m.vao);
+    glBindBuffer(GL_ARRAY_BUFFER, m.vbo);
+    glBufferData(
+        GL_ARRAY_BUFFER, data.size() * sizeof(float), data.data(), GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void *)0);
+    glEnableVertexAttribArray(0);
+
+    m.vertexCount = static_cast<GLsizei>(curvePoints.size());
+    return m;
+  }
+
+  // =========================================================================
+  // CÂMERA ORBITAL
+  // =========================================================================
+
+  void updateOrbitalCameraPosition(const AppState &s, Vector<3> &cameraPos) {
+    cameraPos[0] = s.orbitRadius * std::cos(s.orbitPitch) * std::sin(s.orbitYaw);
+    cameraPos[1] = s.orbitRadius * std::sin(s.orbitPitch);
+    cameraPos[2] = s.orbitRadius * std::cos(s.orbitPitch) * std::cos(s.orbitYaw);
+  }
+
+  // =========================================================================
+  // CALLBACKS
+  // =========================================================================
+
+  void mouseCallback(GLFWwindow *window, double xPosIn, double yPosIn) {
+    AppState &s = stateFromWindow(window);
+    if (!s.useFreeCamera) {
+      return;
+    }
+
+    const float xPos = static_cast<float>(xPosIn);
+    const float yPos = static_cast<float>(yPosIn);
+
+    // Primeira leitura: descarta lixo da posição inicial
+    if (s.firstMouse) {
+      s.lastX = xPos;
+      s.lastY = yPos;
+      s.firstMouse = false;
+    }
+
+    float xoffset = xPos - s.lastX;
+    float yoffset = s.lastY - yPos;  // Invertido: tela cresce para baixo
+    s.lastX = xPos;
+    s.lastY = yPos;
+
+    xoffset *= kMouseSensitivity;
+    yoffset *= kMouseSensitivity;
+
+    s.yaw += xoffset;
+    s.pitch += yoffset;
+
+    if (s.pitch > kMaxPitchRad) s.pitch = kMaxPitchRad;
+    if (s.pitch < -kMaxPitchRad) s.pitch = -kMaxPitchRad;
+  }
+
+  // "/*xoffset*/" pois é um parâmetro não usado mas que a assinatura pede
+  // Evita warning do compilador
+  void scrollCallback(GLFWwindow *window, double /*xoffset*/, double yoffset) {
+    AppState &s = stateFromWindow(window);
+    if (s.useFreeCamera) {
+      return;
+    }
+    s.orbitRadius -= static_cast<float>(yoffset);
+    if (s.orbitRadius < kMinOrbitalRadius) s.orbitRadius = kMinOrbitalRadius;
+    if (s.orbitRadius > kMaxOrbitalRadius) s.orbitRadius = kMaxOrbitalRadius;
+  }
+
+  void framebufferSizeCallback(GLFWwindow *window, int width, int height) {
+    AppState &s = stateFromWindow(window);
+    s.fbWidth = width;
+    s.fbHeight = height;
+    glViewport(0, 0, width, height);
+  }
+
+  // =========================================================================
+  // INPUT
+  // =========================================================================
+
+  void processInput(GLFWwindow *window, Vector<3> &cameraPosition, float deltaTime) {
+    AppState &s = stateFromWindow(window);
+
+    if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
+      glfwSetWindowShouldClose(window, true);
+    }
+
+    if (s.useFreeCamera) {
+      const float speed = kFreeCameraSpeed * deltaTime;
+      Vector<3> forward = directionFromYawPitch(s.yaw, s.pitch);
+      Vector<3> up{0.0f, 1.0f, 0.0f};
+      Vector<3> right = cross(forward, up);
+      right.normalize();
+
+      if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) cameraPosition += forward * speed;
+      if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) cameraPosition -= forward * speed;
+      if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) cameraPosition -= right * speed;
+      if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) cameraPosition += right * speed;
+      if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS) cameraPosition[1] += speed;
+      if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) cameraPosition[1] -= speed;
+    } else {
+      const float angularSpeed = kOrbitalAngularSpeed * deltaTime;
+      if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) s.orbitYaw -= angularSpeed;
+      if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) s.orbitYaw += angularSpeed;
+      if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) s.orbitPitch += angularSpeed;
+      if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) s.orbitPitch -= angularSpeed;
+
+      if (s.orbitPitch > kMaxPitchRad) s.orbitPitch = kMaxPitchRad;
+      if (s.orbitPitch < -kMaxPitchRad) s.orbitPitch = -kMaxPitchRad;
+    }
+
+    // Toggle de câmera em C
+    if (glfwGetKey(window, GLFW_KEY_C) == GLFW_PRESS) {
+      if (!s.cPressed) {
+        s.useFreeCamera = !s.useFreeCamera;
+        s.cPressed = true;
+        if (s.useFreeCamera) {
+          glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+          s.firstMouse = true;
+        } else {
+          glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+        }
+      }
+    } else {
+      s.cPressed = false;
+    }
+
+    // Toggle da curva em T
+    if (glfwGetKey(window, GLFW_KEY_T) == GLFW_PRESS) {
+      if (!s.tPressed) {
+        s.showCurve = !s.showCurve;
+        s.tPressed = true;
+      }
+    } else {
+      s.tPressed = false;
+    }
+  }
+
+  // =========================================================================
+  // EXECUÇÃO PRINCIPAL
+  // =========================================================================
+  // Tudo que aloca recurso GL vive aqui dentro. Quando run() retorna, todos
+  // os recursos foram liberados e os destrutores de Mesh já rodaram, ainda
+  // com o contexto GL válido. Só depois main() chama glfwDestroyWindow
+  int run(GLFWwindow *window) {
+    AppState state;
+    glfwSetWindowUserPointer(window, &state);
+
+    // Sincroniza tamanho real do framebuffer
+    glfwGetFramebufferSize(window, &state.fbWidth, &state.fbHeight);
+    glViewport(0, 0, state.fbWidth, state.fbHeight);
+
+    glEnable(GL_DEPTH_TEST);
+
+    glfwSetCursorPosCallback(window, mouseCallback);
+    glfwSetScrollCallback(window, scrollCallback);
+    glfwSetFramebufferSizeCallback(window, framebufferSizeCallback);
+
+    // ---------------------------------------------------------------------
+    // SHADERS
+    // ---------------------------------------------------------------------
+    // groundShader: chão de grama
+    // objShader:    entidades
+    // pathShader:   caminho de terra
+    // lineShader:   curva-guia amarela
+    unsigned int groundShader = createShaderProgram("data/shaders/grass.vert", "data/shaders/grass.frag");
+    unsigned int objShader = createShaderProgram("data/shaders/shader.vert", "data/shaders/shader.frag");
+    unsigned int pathShader = createShaderProgram("data/shaders/path.vert", "data/shaders/path.frag");
+    unsigned int lineShader = createShaderProgram("data/shaders/line.vert", "data/shaders/line.frag");
+
+    if (!groundShader || !objShader || !pathShader || !lineShader) {
+      std::cout << "ERRO: Falha ao criar um ou mais shaders" << std::endl;
+      glDeleteProgram(groundShader);
+      glDeleteProgram(objShader);
+      glDeleteProgram(pathShader);
+      glDeleteProgram(lineShader);
+      return 1;
+    }
+
+    // Cache das uniform locations
+    GroundUniforms groundU{
+        glGetUniformLocation(groundShader, "view"),
+        glGetUniformLocation(groundShader, "projection"),
+        glGetUniformLocation(groundShader, "grass"),
+        glGetUniformLocation(groundShader, "noise"),
+    };
+    ObjUniforms objU{
+        glGetUniformLocation(objShader, "view"),
+        glGetUniformLocation(objShader, "projection"),
+        glGetUniformLocation(objShader, "model"),
+    };
+    PathUniforms pathU{
+        glGetUniformLocation(pathShader, "view"),
+        glGetUniformLocation(pathShader, "projection"),
+        glGetUniformLocation(pathShader, "model"),
+        glGetUniformLocation(pathShader, "dirt"),
+        glGetUniformLocation(pathShader, "noise"),
+    };
+    LineUniforms lineU{
+        glGetUniformLocation(lineShader, "view"),
+        glGetUniformLocation(lineShader, "projection"),
+    };
+
+    // Texture units são constantes — setamos uma vez só (era refeito todo frame).
+    glUseProgram(groundShader);
+    glUniform1i(groundU.grass, 0);
+    glUniform1i(groundU.noise, 1);
+
+    glUseProgram(pathShader);
+    glUniform1i(pathU.dirt, 0);
+    glUniform1i(pathU.noise, 1);
+
+    // ---------------------------------------------------------------------
+    // CARREGA OBJ ANTES DE ALOCAR MAIS RECURSOS GL
+    // ---------------------------------------------------------------------
+    std::vector<Vertex> objVertices;
+    if (!Parser("data/models/test.obj", objVertices)) {
+      std::cout << "ERRO: Nao encontrou data/models/test.obj" << std::endl;
+      glDeleteProgram(groundShader);
+      glDeleteProgram(objShader);
+      glDeleteProgram(pathShader);
+      glDeleteProgram(lineShader);
+      return 1;
+    }
+
+    // ---------------------------------------------------------------------
+    // GEOMETRIA
+    // ---------------------------------------------------------------------
+    GpuMesh grass = createGrassMesh();
+
+    // Atualmente simula f(x) = x * cos(x), x ∈ [-2, 2] -> [-10, 10] em 20 pontos
+    std::vector<Point> controlPoints = {
+        {-10.0000f, -4.1615f}, {-8.9474f, -1.9551f}, {-7.8947f, -0.0643f},
+        {-6.8421f, 1.3658f},   {-5.7895f, 2.3234f},  {-4.7368f, 2.7654f},
+        {-3.6842f, 2.7286f},   {-2.6316f, 2.2750f},  {-1.5789f, 1.5009f},
+        {-0.5263f, 0.5234f},   {0.5263f, -0.5234f},  {1.5789f, -1.5009f},
+        {2.6316f, -2.2750f},   {3.6842f, -2.7286f},  {4.7368f, -2.7654f},
+        {5.7895f, -2.3234f},   {6.8421f, -1.3658f},  {7.8947f, 0.0643f},
+        {8.9474f, 1.9551f},    {10.0000f, 4.1615f}};
+    std::vector<Point> curvePoints = generateCatmullRomVertices(controlPoints);
+    GpuMesh curve = createCurveMesh(curvePoints);
+
+    Mesh pathMesh = generatePathMesh(curvePoints, 2.0f);
+    Mesh testMesh(objVertices);
+
+    // ---------------------------------------------------------------------
+    // TEXTURAS
+    // ---------------------------------------------------------------------
+    unsigned int grassTexture = loadTexture("data/textures/grass_color.png");
+    unsigned int dirtTexture = loadTexture("data/textures/dirt_color.png");
+    unsigned int noiseTexture = loadTexture("data/textures/perlin_noise.jpg", 3);
+
+    // ---------------------------------------------------------------------
+    // LOOP PRINCIPAL
+    // ---------------------------------------------------------------------
+    Camera cam;
+    Vector<3> cameraPosition{0.0f, 2.0f, 5.0f};
+    Matrix<4, 4> identity = Matrix<4, 4>::identity();
+    float lastFrame = 0.0f;
+
+    while (!glfwWindowShouldClose(window)) {
+      const float currentFrame = static_cast<float>(glfwGetTime());
+      const float deltaTime = currentFrame - lastFrame;
+      lastFrame = currentFrame;
+
+      processInput(window, cameraPosition, deltaTime);
+
+      glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+      glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+      // Aspect ratio respeita o tamanho atual da janela (resize callback)
+      const float aspect =
+          static_cast<float>(state.fbWidth) / static_cast<float>(state.fbHeight);
+      cam.setPerspective(
+          kFovDegrees * math_constants::kDegToRad, aspect, kNearPlane, kFarPlane);
+
+      if (state.useFreeCamera) {
+        cam.setFPS(cameraPosition, state.yaw, state.pitch);
+      } else {
+        updateOrbitalCameraPosition(state, cameraPosition);
+        Vector<3> lookTarget{0.0f, 0.0f, 0.0f};
+        cam.setLookAt(cameraPosition, lookTarget);
+      }
+
+      auto glView = toOpenGLMatrix(cam.getViewMatrix());
+      auto glProj = toOpenGLMatrix(cam.getProjectionMatrix());
+
+      // -------------------------------------------------------------------
+      // ENTIDADES OPACAS
+      // -------------------------------------------------------------------
+      glUseProgram(objShader);
+      glUniformMatrix4fv(objU.view, 1, GL_FALSE, glView.data());
+      glUniformMatrix4fv(objU.projection, 1, GL_FALSE, glProj.data());
+      glUniformMatrix4fv(objU.model, 1, GL_FALSE, identity.getData());
+      testMesh.Draw();
+
+      // -------------------------------------------------------------------
+      // CHÃO DE GRAMA
+      // -------------------------------------------------------------------
+      glUseProgram(groundShader);
+      glUniformMatrix4fv(groundU.view, 1, GL_FALSE, glView.data());
+      glUniformMatrix4fv(groundU.projection, 1, GL_FALSE, glProj.data());
+
+      glActiveTexture(GL_TEXTURE0);
+      glBindTexture(GL_TEXTURE_2D, grassTexture);
+      glActiveTexture(GL_TEXTURE1);
+      glBindTexture(GL_TEXTURE_2D, noiseTexture);
+
+      glBindVertexArray(grass.vao);
+      glDrawArrays(GL_TRIANGLES, 0, grass.vertexCount);
+
+      // -------------------------------------------------------------------
+      // CAMINHO DE TERRA
+      // -------------------------------------------------------------------
+      glUseProgram(pathShader);
+      glUniformMatrix4fv(pathU.view, 1, GL_FALSE, glView.data());
+      glUniformMatrix4fv(pathU.projection, 1, GL_FALSE, glProj.data());
+      glUniformMatrix4fv(pathU.model, 1, GL_FALSE, identity.getData());
+
+      glEnable(GL_BLEND);
+      glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+      glDepthMask(GL_FALSE);
+
+      glActiveTexture(GL_TEXTURE0);
+      glBindTexture(GL_TEXTURE_2D, dirtTexture);
+      glActiveTexture(GL_TEXTURE1);
+      glBindTexture(GL_TEXTURE_2D, noiseTexture);
+
+      pathMesh.Draw();
+
+      glDepthMask(GL_TRUE);
+      glDisable(GL_BLEND);
+
+      // -------------------------------------------------------------------
+      // 4. CURVA
+      // -------------------------------------------------------------------
+      if (state.showCurve) {
+        glUseProgram(lineShader);
+        glUniformMatrix4fv(lineU.view, 1, GL_FALSE, glView.data());
+        glUniformMatrix4fv(lineU.projection, 1, GL_FALSE, glProj.data());
+        glBindVertexArray(curve.vao);
+        glDrawArrays(GL_LINE_STRIP, 0, curve.vertexCount);
+      }
+
+      glfwSwapBuffers(window);
+      glfwPollEvents();
+    }
+
+    // ---------------------------------------------------------------------
+    // LIMPEZA DE RECURSOS GL
+    // ---------------------------------------------------------------------
+    glDeleteTextures(1, &grassTexture);
+    glDeleteTextures(1, &dirtTexture);
+    glDeleteTextures(1, &noiseTexture);
+
+    glDeleteVertexArrays(1, &grass.vao);
+    glDeleteBuffers(1, &grass.vbo);
+    glDeleteVertexArrays(1, &curve.vao);
+    glDeleteBuffers(1, &curve.vbo);
+
+    glDeleteProgram(groundShader);
+    glDeleteProgram(objShader);
+    glDeleteProgram(pathShader);
+    glDeleteProgram(lineShader);
+
+    return 0;
+  }
 
 }  // namespace
-
-void updateOrbitalCameraPosition(Vector<3> &cameraPos) {
-  const float radius = gOrbital.radius;
-  const float pitch = gOrbital.pitch;
-  const float yaw = gOrbital.yaw;
-
-  cameraPos[0] = radius * std::cos(pitch) * std::sin(yaw);
-  cameraPos[1] = radius * std::sin(pitch);
-  cameraPos[2] = radius * std::cos(pitch) * std::cos(yaw);
-}
-
-// A assinatura exige o formato (GLFWwindow *window, double xPosIn, double
-// yPosIn), mesmo que não usemos alguns desses parâmetros
-void mouseCallback(GLFWwindow *window, double xPosIn, double yPosIn) {
-  // Se a câmera livre não está ativada, ignora movimento do mouse
-  if (!gAppConfig.useFreeCamera) {
-    return;
-  }
-
-  const float xPos = static_cast<float>(xPosIn);
-  const float yPos = static_cast<float>(yPosIn);
-
-  // Carrega variáveis na primeira leitura do mouse, para tirar lixo das variáveis
-  if (gMouse.firstMouse) {
-    gMouse.lastX = xPos;
-    gMouse.lastY = yPos;
-    gMouse.firstMouse = false;
-  }
-
-  // Calcula deslocamento do mouse desde o último frame e atualiza última posição do mouse
-  float xoffset = xPos - gMouse.lastX;
-  float yoffset = gMouse.lastY - yPos;  // Invertido porque a tela cresce para baixo
-  gMouse.lastX = xPos;
-  gMouse.lastY = yPos;
-
-  xoffset *= kMouseSensitivity;
-  yoffset *= kMouseSensitivity;
-
-  gMouse.yaw += xoffset;
-  gMouse.pitch += yoffset;
-
-  // Limita o pitch em [kMaxPitchRad, -kMaxPitchRad] para que a câmera não vire de cabeça
-  // para baixo
-  if (gMouse.pitch > kMaxPitchRad) {
-    gMouse.pitch = kMaxPitchRad;
-  }
-  if (gMouse.pitch < -kMaxPitchRad) {
-    gMouse.pitch = -kMaxPitchRad;
-  }
-}
-
-// A assinatura exige o formato (GLFWwindow *window, double xoffset, double
-// yoffset), mesmo que não usemos alguns desses parâmetros
-void scrollCallback(GLFWwindow *window, double xoffset, double yoffset) {
-  if (!gAppConfig.useFreeCamera) {
-    // Muda o raio da esfera conforme o scroll
-    gOrbital.radius -= static_cast<float>(yoffset);
-
-    // Limita o entre [kMinOrbitalRadius, kMaxOrbitalRadius]
-    if (gOrbital.radius < kMinOrbitalRadius) {
-      gOrbital.radius = kMinOrbitalRadius;
-    }
-    if (gOrbital.radius > kMaxOrbitalRadius) {
-      gOrbital.radius = kMaxOrbitalRadius;
-    }
-  }
-}
-
-void processInput(GLFWwindow *window, Vector<3> &cameraPosition, float deltaTime) {
-  if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
-    glfwSetWindowShouldClose(window, true);
-  }
-
-  // Câmera livre
-  if (gAppConfig.useFreeCamera) {
-    const float speed = kFreeCameraSpeed * deltaTime;
-
-    Vector<3> forward = directionFromYawPitch(gMouse.yaw, gMouse.pitch);
-    Vector<3> up{0.0f, 1.0f, 0.0f};
-    Vector<3> right = cross(forward, up);
-    right.normalize();
-
-    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
-      cameraPosition += forward * speed;
-    }
-    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
-      cameraPosition -= forward * speed;
-    }
-    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
-      cameraPosition -= right * speed;
-    }
-    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
-      cameraPosition += right * speed;
-    }
-    if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS) {
-      cameraPosition[1] += speed;
-    }
-    if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) {
-      cameraPosition[1] -= speed;
-    }
-    // Câmera look-at
-  } else {
-    const float angularSpeed = kOrbitalAngularSpeed * deltaTime;
-
-    // yaw anda horizontalmente na esfera
-    // pitch anda verticalmente na esfera
-    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
-      gOrbital.yaw -= angularSpeed;
-    }
-    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
-      gOrbital.yaw += angularSpeed;
-    }
-    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
-      gOrbital.pitch += angularSpeed;
-    }
-    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
-      gOrbital.pitch -= angularSpeed;
-    }
-
-    // Limita o pitch em [kMaxPitchRad, -kMaxPitchRad] para que a câmera não vire de
-    // cabeça para baixo
-    if (gOrbital.pitch > kMaxPitchRad) {
-      gOrbital.pitch = kMaxPitchRad;
-    }
-    if (gOrbital.pitch < -kMaxPitchRad) {
-      gOrbital.pitch = -kMaxPitchRad;
-    }
-  }
-
-  // Mudança de câmera
-  if (glfwGetKey(window, GLFW_KEY_C) == GLFW_PRESS) {
-    if (!gAppConfig.cPressed) {
-      gAppConfig.useFreeCamera = !gAppConfig.useFreeCamera;
-      gAppConfig.cPressed = true;
-
-      // Desabilita cursor na câmera livre, pois o cursor é sempre o centro da câmera
-      // Ativa o cursos na câmera look-at, pois os comandos são pelo teclado
-      if (gAppConfig.useFreeCamera) {
-        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-        gMouse.firstMouse = true;
-      } else {
-        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
-      }
-    }
-  } else {
-    gAppConfig.cPressed = false;
-  }
-
-  // Toggle da curva
-  if (glfwGetKey(window, GLFW_KEY_T) == GLFW_PRESS) {
-    if (!gAppConfig.tPressed) {
-      gAppConfig.showCurve = !gAppConfig.showCurve;
-      gAppConfig.tPressed = true;
-    }
-  } else {
-    gAppConfig.tPressed = false;
-  }
-}
 
 int main() {
   if (!glfwInit()) {
@@ -249,318 +583,9 @@ int main() {
     return 1;
   }
 
-  glEnable(GL_DEPTH_TEST);
+  const int exitCode = run(window);
 
-  glfwSetCursorPosCallback(window, mouseCallback);
-  glfwSetScrollCallback(window, scrollCallback);
-
-  unsigned int shaderProgram =
-      createShaderProgram(kVertexShaderPath, kFragmentShaderPath);
-  if (shaderProgram == 0) {
-    glfwTerminate();
-    return 1;
-  }
-  glUseProgram(shaderProgram);
-
-  // [TEMPORÁRIO] Gera um plano simples no XZ para servir de chão texturizado com grama
-  // clang-format off
-  // Considerar criar um struct Vertex de 5 floats
-  std::vector<float> grassVertices = {
-    //  X      Y      Z      U      V
-    // PRIMEIRO TRIÂNGULO
-    -20.0f,  0.0f, -20.0f,  0.0f,  20.0f, // Trás Esquerda
-     20.0f,  0.0f, -20.0f,  20.0f, 20.0f, // Trás Direita
-    -20.0f,  0.0f,  20.0f,  0.0f,  0.0f,  // Frente Esquerda
-
-    // SEGUNDO TRIÂNGULO
-     20.0f,  0.0f, -20.0f, 20.0f, 20.0f,  // Trás Direita
-     20.0f,  0.0f,  20.0f, 20.0f,  0.0f,  // Frente Direita
-    -20.0f,  0.0f,  20.0f,  0.0f,  0.0f   // Frente Esquerda
-  };
-  // clang-format on
-
-  unsigned int grassVAO, grassVBO;
-  glGenVertexArrays(1, &grassVAO);
-  glGenBuffers(1, &grassVBO);
-  glBindVertexArray(grassVAO);
-  glBindBuffer(GL_ARRAY_BUFFER, grassVBO);
-  glBufferData(GL_ARRAY_BUFFER,
-               grassVertices.size() * sizeof(float),
-               grassVertices.data(),
-               GL_STATIC_DRAW);
-
-  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void *)0);
-  glEnableVertexAttribArray(0);
-  glVertexAttribPointer(
-      1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void *)(3 * sizeof(float)));
-  glEnableVertexAttribArray(1);
-
-  // Instancia a curva de teste
-  std::vector<Point> controlPoints = {
-      {-10.0000f, -4.1615f}, {-8.9474f, -1.9551f}, {-7.8947f, -0.0643f},
-      {-6.8421f, 1.3658f},   {-5.7895f, 2.3234f},  {-4.7368f, 2.7654f},
-      {-3.6842f, 2.7286f},   {-2.6316f, 2.2750f},  {-1.5789f, 1.5009f},
-      {-0.5263f, 0.5234f},   {0.5263f, -0.5234f},  {1.5789f, -1.5009f},
-      {2.6316f, -2.2750f},   {3.6842f, -2.7286f},  {4.7368f, -2.7654f},
-      {5.7895f, -2.3234f},   {6.8421f, -1.3658f},  {7.8947f, 0.0643f},
-      {8.9474f, 1.9551f},    {10.0000f, 4.1615f}};
-
-  std::vector<Point> curvePoints = generateCatmullRomVertices(controlPoints);
-  std::vector<float> curveVertices;
-  for (const Point &p : curvePoints) {
-    curveVertices.push_back(p.x);
-    curveVertices.push_back(0.1f);  // Um pouco acima do chao para nao dar z-fighting
-    curveVertices.push_back(p.y);
-  }
-
-  Mesh pathMesh = generatePathMesh(curvePoints, 2.0f);
-
-  unsigned int curveVAO, curveVBO;
-  glGenVertexArrays(1, &curveVAO);
-  glGenBuffers(1, &curveVBO);
-  glBindVertexArray(curveVAO);
-  glBindBuffer(GL_ARRAY_BUFFER, curveVBO);
-  glBufferData(GL_ARRAY_BUFFER,
-               curveVertices.size() * sizeof(float),
-               curveVertices.data(),
-               GL_STATIC_DRAW);
-  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void *)0);
-  glEnableVertexAttribArray(0);
-
-  unsigned int objShaderProgram =
-      createShaderProgram("data/shaders/shader.vert", "data/shaders/shader.frag");
-  if (objShaderProgram == 0) {
-    return 1;
-  }
-
-  unsigned int pathShaderProgram =
-      createShaderProgram("data/shaders/path.vert", "data/shaders/path.frag");
-  if (pathShaderProgram == 0) {
-    return 1;
-  }
-
-  std::vector<Vertex> objVertices;
-
-  if (!Parser("data/models/test.obj", objVertices)) {
-    std::cout << "ERRO: Nao encontrou data/models/test.obj" << std::endl;
-    return 1;
-  }
-  Mesh test(objVertices);
-
-  Camera cam;
-  Vector<3> cameraPosition{0.0f, 2.0f, 5.0f};
-
-  // Carrega e cria a textura da grama
-  unsigned int grassTexture;
-  glGenTextures(1, &grassTexture);
-  glBindTexture(GL_TEXTURE_2D, grassTexture);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-  int grassWidth, grassHeight, grassChannels;
-  unsigned char *grassData = stbi_load(
-      "data/textures/grass_color.png", &grassWidth, &grassHeight, &grassChannels, 0);
-
-  if (grassData) {
-    GLenum format = GL_RGB;
-    if (grassChannels == 4) format = GL_RGBA;
-    glTexImage2D(GL_TEXTURE_2D,
-                 0,
-                 format,
-                 grassWidth,
-                 grassHeight,
-                 0,
-                 format,
-                 GL_UNSIGNED_BYTE,
-                 grassData);
-    glGenerateMipmap(GL_TEXTURE_2D);
-  } else {
-    std::cout << "ERRO: Falha ao carregar a textura data/textures/grass.png" << std::endl;
-  }
-  stbi_image_free(grassData);
-
-  // Carrega e cria a textura da terra
-  unsigned int dirtTexture;
-  glGenTextures(1, &dirtTexture);
-  glBindTexture(GL_TEXTURE_2D, dirtTexture);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-  int width, height, nrChannels;
-  unsigned char *dirtData =
-      stbi_load("data/textures/dirt_color.png", &width, &height, &nrChannels, 0);
-
-  if (dirtData) {
-    GLenum format = GL_RGB;
-    if (nrChannels == 4) format = GL_RGBA;
-    glTexImage2D(
-        GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, dirtData);
-    glGenerateMipmap(GL_TEXTURE_2D);
-  } else {
-    std::cout << "ERRO: Falha ao carregar a textura data/textures/dirt_color.png"
-              << std::endl;
-  }
-  stbi_image_free(dirtData);
-
-  unsigned int noiseTexture;
-  glGenTextures(1, &noiseTexture);
-  glBindTexture(GL_TEXTURE_2D, noiseTexture);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-  glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-
-  int noiseWidth, noiseHeight, noiseChannels;
-  unsigned char *noiseData = stbi_load(
-      "data/textures/perlin_noise.jpg", &noiseWidth, &noiseHeight, &noiseChannels, 3);
-
-  if (noiseData) {
-    glTexImage2D(GL_TEXTURE_2D,
-                 0,
-                 GL_RGB,
-                 noiseWidth,
-                 noiseHeight,
-                 0,
-                 GL_RGB,
-                 GL_UNSIGNED_BYTE,
-                 noiseData);
-    glGenerateMipmap(GL_TEXTURE_2D);
-  } else {
-    std::cout << "ERRO: Falha ao carregar a textura data/textures/perlin_noise.jpg"
-              << std::endl;
-  }
-  stbi_image_free(noiseData);
-
-  glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
-
-  glUseProgram(pathShaderProgram);
-  glUniform1i(glGetUniformLocation(pathShaderProgram, "dirt"), 0);
-  glUniform1i(glGetUniformLocation(pathShaderProgram, "noise"), 1);
-
-  float lastFrame = 0.0f;
-
-  while (!glfwWindowShouldClose(window)) {
-    const float currentFrame = glfwGetTime();
-    const float deltaTime = currentFrame - lastFrame;
-    lastFrame = currentFrame;
-
-    processInput(window, cameraPosition, deltaTime);
-
-    glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-    cam.setPerspective(
-        kFovDegrees * math_constants::kDegToRad,
-        static_cast<float>(kWindowWidth) / static_cast<float>(kWindowHeight),
-        kNearPlane,
-        kFarPlane);
-
-    if (gAppConfig.useFreeCamera) {
-      cam.setFPS(cameraPosition, gMouse.yaw, gMouse.pitch);
-    } else {
-      updateOrbitalCameraPosition(cameraPosition);
-
-      Vector<3> lookTarget{0.0f, 0.0f, 0.0f};
-      cam.setLookAt(cameraPosition, lookTarget);
-    }
-
-    Matrix<4, 4> view = cam.getViewMatrix();
-    Matrix<4, 4> projection = cam.getProjectionMatrix();
-
-    auto glView = toOpenGLMatrix(view);
-    auto glProj = toOpenGLMatrix(projection);
-
-    // =====================================================================
-    // DESENHA AS ENTIDADES
-    // =====================================================================
-    glUseProgram(objShaderProgram);
-    unsigned int objViewLoc = glGetUniformLocation(objShaderProgram, "view");
-    unsigned int objProjLoc = glGetUniformLocation(objShaderProgram, "projection");
-    unsigned int objModelLoc = glGetUniformLocation(objShaderProgram, "model");
-
-    glUniformMatrix4fv(objViewLoc, 1, GL_FALSE, glView.data());
-    glUniformMatrix4fv(objProjLoc, 1, GL_FALSE, glProj.data());
-
-    Matrix<4, 4> identity = Matrix<4, 4>::identity();
-    glUniformMatrix4fv(objModelLoc, 1, GL_FALSE, identity.getData());
-
-    test.Draw();
-
-    // =====================================================================
-    // DESENHA A GRAMA E A CURVA
-    // =====================================================================
-    glUseProgram(shaderProgram);
-
-    unsigned int viewLoc = glGetUniformLocation(shaderProgram, "view");
-    unsigned int projLoc = glGetUniformLocation(shaderProgram, "projection");
-
-    glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glView.data());
-    glUniformMatrix4fv(projLoc, 1, GL_FALSE, glProj.data());
-
-    glUniform1i(glGetUniformLocation(shaderProgram, "grass"), 0);
-    glUniform1i(glGetUniformLocation(shaderProgram, "noise"), 1);
-
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, grassTexture);
-
-    glActiveTexture(GL_TEXTURE1);
-    glBindTexture(GL_TEXTURE_2D, noiseTexture);
-
-    glUniform1i(glGetUniformLocation(shaderProgram, "isGrass"), 1);
-
-    glBindVertexArray(grassVAO);
-    glDrawArrays(GL_TRIANGLES, 0, 6);
-
-    if (gAppConfig.showCurve) {
-      glUniform1i(glGetUniformLocation(shaderProgram, "isGrass"), 0);
-      glBindVertexArray(curveVAO);
-      glDrawArrays(GL_LINE_STRIP, 0, curveVertices.size() / 3);
-    }
-
-    // =====================================================================
-    // DESENHA O CAMINHO DE TERRA
-    // =====================================================================
-    glUseProgram(pathShaderProgram);
-
-    unsigned int pathViewLoc = glGetUniformLocation(pathShaderProgram, "view");
-    unsigned int pathProjLoc = glGetUniformLocation(pathShaderProgram, "projection");
-    unsigned int pathModelLoc = glGetUniformLocation(pathShaderProgram, "model");
-
-    glUniformMatrix4fv(pathViewLoc, 1, GL_FALSE, glView.data());
-    glUniformMatrix4fv(pathProjLoc, 1, GL_FALSE, glProj.data());
-    glUniformMatrix4fv(pathModelLoc, 1, GL_FALSE, identity.getData());
-
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, dirtTexture);
-
-    glActiveTexture(GL_TEXTURE1);
-    glBindTexture(GL_TEXTURE_2D, noiseTexture);
-
-    pathMesh.Draw();
-
-    glDisable(GL_BLEND);
-
-    // =====================================================================
-    // ATUALIZA A TELA
-    // =====================================================================
-    glfwSwapBuffers(window);
-    glfwPollEvents();
-  }
-
-  // =====================================================================
-  // LIMPEZA DE MEMÓRIA
-  // =====================================================================
-  glDeleteProgram(objShaderProgram);
-  glDeleteProgram(pathShaderProgram);
-  glDeleteProgram(shaderProgram);
-  glDeleteBuffers(1, &grassVBO);
-  glDeleteVertexArrays(1, &grassVAO);
   glfwDestroyWindow(window);
   glfwTerminate();
+  return exitCode;
 }
