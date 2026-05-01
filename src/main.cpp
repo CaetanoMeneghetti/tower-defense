@@ -4,19 +4,19 @@
 
 #include <algorithm>
 #include <cmath>
-#include <vector>
 #include <iostream>
+#include <vector>
 
 #include "engine/camera.h"
-#include "engine/shader_utils.h"
+#include "engine/catmull_rom.h"
 #include "engine/mesh.h"
 #include "engine/parser.h"
+#include "engine/shader_utils.h"
 #include "math/constants.h"
 #include "math/matrix.h"
 #include "math/opengl_utils.h"
 #include "math/vector.h"
 #include "math/vector_ops.h"
-
 
 namespace {
 
@@ -38,6 +38,8 @@ namespace {
   struct AppConfig {
     bool useFreeCamera = false;
     bool cPressed = false;
+    bool showCurve = false;
+    bool tPressed = false;
   };
 
   struct MouseState {
@@ -228,6 +230,16 @@ void processInput(GLFWwindow *window, Vector<3> &cameraPosition, float deltaTime
   } else {
     gAppConfig.cPressed = false;
   }
+
+  // Toggle da curva
+  if (glfwGetKey(window, GLFW_KEY_T) == GLFW_PRESS) {
+    if (!gAppConfig.tPressed) {
+      gAppConfig.showCurve = !gAppConfig.showCurve;
+      gAppConfig.tPressed = true;
+    }
+  } else {
+    gAppConfig.tPressed = false;
+  }
 }
 
 int main() {
@@ -279,14 +291,47 @@ int main() {
   glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void *)0);
   glEnableVertexAttribArray(0);
 
-  //Carrega mesh de teste
-  unsigned int objShaderProgram = createShaderProgram("data/shaders/shader.vert","data/shaders/shader.frag");
-  if (objShaderProgram == 0) return 1;
-  std::vector<Vertex> objVertices;
-  if(!Parser("data/models/teste.obj", objVertices)) {
-    std::cout << "ERRO: Nao encontrou data/models/teste.obj" << std::endl;
+  // Instancia a curva de teste
+  std::vector<Point> controlPoints = {
+      {-10.0000f, -4.1615f}, {-8.9474f, -1.9551f}, {-7.8947f, -0.0643f},
+      {-6.8421f, 1.3658f},   {-5.7895f, 2.3234f},  {-4.7368f, 2.7654f},
+      {-3.6842f, 2.7286f},   {-2.6316f, 2.2750f},  {-1.5789f, 1.5009f},
+      {-0.5263f, 0.5234f},   {0.5263f, -0.5234f},  {1.5789f, -1.5009f},
+      {2.6316f, -2.2750f},   {3.6842f, -2.7286f},  {4.7368f, -2.7654f},
+      {5.7895f, -2.3234f},   {6.8421f, -1.3658f},  {7.8947f, 0.0643f},
+      {8.9474f, 1.9551f},    {10.0000f, 4.1615f}};
+
+  std::vector<Point> curvePoints = generateCatmullRomVertices(controlPoints);
+  std::vector<float> curveVertices;
+  for (const Point &p : curvePoints) {
+    curveVertices.push_back(p.x);
+    curveVertices.push_back(0.1f);  // Um pouco acima do chao para nao dar z-fighting
+    curveVertices.push_back(p.y);
+  }
+  unsigned int curveVAO, curveVBO;
+  glGenVertexArrays(1, &curveVAO);
+  glGenBuffers(1, &curveVBO);
+  glBindVertexArray(curveVAO);
+  glBindBuffer(GL_ARRAY_BUFFER, curveVBO);
+  glBufferData(GL_ARRAY_BUFFER,
+               curveVertices.size() * sizeof(float),
+               curveVertices.data(),
+               GL_STATIC_DRAW);
+  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void *)0);
+  glEnableVertexAttribArray(0);
+
+  // Carrega mesh de teste
+  unsigned int objShaderProgram =
+      createShaderProgram("data/shaders/shader.vert", "data/shaders/shader.frag");
+  if (objShaderProgram == 0) {
     return 1;
-}
+  }
+  std::vector<Vertex> objVertices;
+
+  if (!Parser("data/models/test.obj", objVertices)) {
+    std::cout << "ERRO: Nao encontrou data/models/test.obj" << std::endl;
+    return 1;
+  }
   Mesh teste(objVertices);
 
   Camera cam;
@@ -333,13 +378,8 @@ int main() {
     glUniformMatrix4fv(objViewLoc, 1, GL_FALSE, glView.data());
     glUniformMatrix4fv(objProjLoc, 1, GL_FALSE, glProj.data());
 
-    float matrixIdentidade[16] = {
-        1.0f, 0.0f, 0.0f, 0.0f,
-        0.0f, 1.0f, 0.0f, 0.0f,
-        0.0f, 0.0f, 1.0f, 0.0f,
-        0.0f, 0.0f, 0.0f, 1.0f
-    };
-    glUniformMatrix4fv(objModelLoc, 1, GL_FALSE, matrixIdentidade);
+    Matrix<4, 4> identity = Matrix<4, 4>::identity();
+    glUniformMatrix4fv(objModelLoc, 1, GL_FALSE, identity.getData());
 
     teste.Draw();
 
@@ -353,6 +393,11 @@ int main() {
 
     glBindVertexArray(VAO);
     glDrawArrays(GL_LINES, 0, grid.size() / 3);
+
+    if (gAppConfig.showCurve) {
+      glBindVertexArray(curveVAO);
+      glDrawArrays(GL_LINE_STRIP, 0, curveVertices.size() / 3);
+    }
 
     glfwSwapBuffers(window);
     glfwPollEvents();

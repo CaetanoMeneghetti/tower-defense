@@ -20,6 +20,8 @@ class Matrix {
 
   size_t getNumRows() const;
   size_t getNumColumns() const;
+  const float *getData() const;
+  float *getData();
 };
 
 template <size_t R, size_t C>
@@ -40,6 +42,16 @@ size_t Matrix<R, C>::getNumRows() const {
 template <size_t R, size_t C>
 size_t Matrix<R, C>::getNumColumns() const {
   return C;
+}
+
+template <size_t R, size_t C>
+const float *Matrix<R, C>::getData() const {
+  return data_.data();
+}
+
+template <size_t R, size_t C>
+float *Matrix<R, C>::getData() {
+  return data_.data();
 }
 
 template <size_t R, size_t C>
