@@ -2,6 +2,7 @@
 #include <GLFW/glfw3.h>
 #include <glad/glad.h>
 
+#define STB_IMAGE_IMPLEMENTATION
 #include <algorithm>
 #include <cmath>
 #include <iostream>
@@ -15,13 +16,16 @@
 #include "math/constants.h"
 #include "math/matrix.h"
 #include "math/opengl_utils.h"
+#include "math/transforms.h"
 #include "math/vector.h"
 #include "math/vector_ops.h"
+#include "stb_image.h"
+#include "world/path_generator.h"
 
 namespace {
 
-  constexpr int kWindowWidth = 800;
-  constexpr int kWindowHeight = 600;
+  constexpr int kWindowWidth = 1920;
+  constexpr int kWindowHeight = 1080;
   constexpr float kMouseSensitivity = 0.005f;
   constexpr float kFreeCameraSpeed = 5.0f;
   constexpr float kOrbitalAngularSpeed = 2.0f;
@@ -32,8 +36,8 @@ namespace {
   constexpr float kNearPlane = 0.1f;
   constexpr float kFarPlane = 100.0f;
   constexpr char kWindowTitle[] = "Tower Defense";
-  constexpr char kVertexShaderPath[] = "data/shaders/grid.vert";
-  constexpr char kFragmentShaderPath[] = "data/shaders/grid.frag";
+  constexpr char kVertexShaderPath[] = "data/shaders/grass.vert";
+  constexpr char kFragmentShaderPath[] = "data/shaders/grass.frag";
 
   struct AppConfig {
     bool useFreeCamera = false;
@@ -62,27 +66,6 @@ namespace {
   OrbitalState gOrbital;
 
 }  // namespace
-
-std::vector<float> buildGridLines(int minCoord, int maxCoord) {
-  std::vector<float> grid;
-
-  const float minF = static_cast<float>(minCoord);
-  const float maxF = static_cast<float>(maxCoord);
-
-  // Cada valor gera 2 linhas (eixos X e Z)
-  for (int i = minCoord; i <= maxCoord; ++i) {
-    float p = static_cast<float>(i);
-
-    // Linha paralela ao eixo Z
-    // Isso está colocando os pontos (p, 0, minF) e (p, 0, maxF) no final de grid
-    grid.insert(grid.end(), {p, 0.0f, minF, p, 0.0f, maxF});
-    // Linha paralela ao eixo X
-    // Isso está colocando os pontos (minF, 0, p) e (maxF, 0, p) no final de grid
-    grid.insert(grid.end(), {minF, 0.0f, p, maxF, 0.0f, p});
-  }
-
-  return grid;
-}
 
 void updateOrbitalCameraPosition(Vector<3> &cameraPos) {
   const float radius = gOrbital.radius;
@@ -279,17 +262,38 @@ int main() {
   }
   glUseProgram(shaderProgram);
 
-  // [TEMPORÁRIO] Gera uma grade simples no plano XZ para servir de chão
-  const std::vector<float> grid = buildGridLines(-20, 20);
+  // [TEMPORÁRIO] Gera um plano simples no XZ para servir de chão texturizado com grama
+  // clang-format off
+  // Considerar criar um struct Vertex de 5 floats
+  std::vector<float> grassVertices = {
+    //  X      Y      Z      U      V
+    // PRIMEIRO TRIÂNGULO
+    -20.0f,  0.0f, -20.0f,  0.0f,  20.0f, // Trás Esquerda
+     20.0f,  0.0f, -20.0f,  20.0f, 20.0f, // Trás Direita
+    -20.0f,  0.0f,  20.0f,  0.0f,  0.0f,  // Frente Esquerda
 
-  unsigned int VAO, VBO;
-  glGenVertexArrays(1, &VAO);
-  glGenBuffers(1, &VBO);
-  glBindVertexArray(VAO);
-  glBindBuffer(GL_ARRAY_BUFFER, VBO);
-  glBufferData(GL_ARRAY_BUFFER, grid.size() * sizeof(float), grid.data(), GL_STATIC_DRAW);
-  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void *)0);
+    // SEGUNDO TRIÂNGULO
+     20.0f,  0.0f, -20.0f, 20.0f, 20.0f,  // Trás Direita
+     20.0f,  0.0f,  20.0f, 20.0f,  0.0f,  // Frente Direita
+    -20.0f,  0.0f,  20.0f,  0.0f,  0.0f   // Frente Esquerda
+  };
+  // clang-format on
+
+  unsigned int grassVAO, grassVBO;
+  glGenVertexArrays(1, &grassVAO);
+  glGenBuffers(1, &grassVBO);
+  glBindVertexArray(grassVAO);
+  glBindBuffer(GL_ARRAY_BUFFER, grassVBO);
+  glBufferData(GL_ARRAY_BUFFER,
+               grassVertices.size() * sizeof(float),
+               grassVertices.data(),
+               GL_STATIC_DRAW);
+
+  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void *)0);
   glEnableVertexAttribArray(0);
+  glVertexAttribPointer(
+      1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void *)(3 * sizeof(float)));
+  glEnableVertexAttribArray(1);
 
   // Instancia a curva de teste
   std::vector<Point> controlPoints = {
@@ -308,6 +312,9 @@ int main() {
     curveVertices.push_back(0.1f);  // Um pouco acima do chao para nao dar z-fighting
     curveVertices.push_back(p.y);
   }
+
+  Mesh pathMesh = generatePathMesh(curvePoints, 2.0f);
+
   unsigned int curveVAO, curveVBO;
   glGenVertexArrays(1, &curveVAO);
   glGenBuffers(1, &curveVBO);
@@ -320,22 +327,118 @@ int main() {
   glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void *)0);
   glEnableVertexAttribArray(0);
 
-  // Carrega mesh de teste
   unsigned int objShaderProgram =
       createShaderProgram("data/shaders/shader.vert", "data/shaders/shader.frag");
   if (objShaderProgram == 0) {
     return 1;
   }
+
+  unsigned int pathShaderProgram =
+      createShaderProgram("data/shaders/path.vert", "data/shaders/path.frag");
+  if (pathShaderProgram == 0) {
+    return 1;
+  }
+
   std::vector<Vertex> objVertices;
 
   if (!Parser("data/models/test.obj", objVertices)) {
     std::cout << "ERRO: Nao encontrou data/models/test.obj" << std::endl;
     return 1;
   }
-  Mesh teste(objVertices);
+  Mesh test(objVertices);
 
   Camera cam;
   Vector<3> cameraPosition{0.0f, 2.0f, 5.0f};
+
+  // Carrega e cria a textura da grama
+  unsigned int grassTexture;
+  glGenTextures(1, &grassTexture);
+  glBindTexture(GL_TEXTURE_2D, grassTexture);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  int grassWidth, grassHeight, grassChannels;
+  unsigned char *grassData = stbi_load(
+      "data/textures/grass_color.png", &grassWidth, &grassHeight, &grassChannels, 0);
+
+  if (grassData) {
+    GLenum format = GL_RGB;
+    if (grassChannels == 4) format = GL_RGBA;
+    glTexImage2D(GL_TEXTURE_2D,
+                 0,
+                 format,
+                 grassWidth,
+                 grassHeight,
+                 0,
+                 format,
+                 GL_UNSIGNED_BYTE,
+                 grassData);
+    glGenerateMipmap(GL_TEXTURE_2D);
+  } else {
+    std::cout << "ERRO: Falha ao carregar a textura data/textures/grass.png" << std::endl;
+  }
+  stbi_image_free(grassData);
+
+  // Carrega e cria a textura da terra
+  unsigned int dirtTexture;
+  glGenTextures(1, &dirtTexture);
+  glBindTexture(GL_TEXTURE_2D, dirtTexture);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  int width, height, nrChannels;
+  unsigned char *dirtData =
+      stbi_load("data/textures/dirt_color.png", &width, &height, &nrChannels, 0);
+
+  if (dirtData) {
+    GLenum format = GL_RGB;
+    if (nrChannels == 4) format = GL_RGBA;
+    glTexImage2D(
+        GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, dirtData);
+    glGenerateMipmap(GL_TEXTURE_2D);
+  } else {
+    std::cout << "ERRO: Falha ao carregar a textura data/textures/dirt_color.png"
+              << std::endl;
+  }
+  stbi_image_free(dirtData);
+
+  unsigned int noiseTexture;
+  glGenTextures(1, &noiseTexture);
+  glBindTexture(GL_TEXTURE_2D, noiseTexture);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+
+  int noiseWidth, noiseHeight, noiseChannels;
+  unsigned char *noiseData = stbi_load(
+      "data/textures/perlin_noise.jpg", &noiseWidth, &noiseHeight, &noiseChannels, 3);
+
+  if (noiseData) {
+    glTexImage2D(GL_TEXTURE_2D,
+                 0,
+                 GL_RGB,
+                 noiseWidth,
+                 noiseHeight,
+                 0,
+                 GL_RGB,
+                 GL_UNSIGNED_BYTE,
+                 noiseData);
+    glGenerateMipmap(GL_TEXTURE_2D);
+  } else {
+    std::cout << "ERRO: Falha ao carregar a textura data/textures/perlin_noise.jpg"
+              << std::endl;
+  }
+  stbi_image_free(noiseData);
+
+  glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+
+  glUseProgram(pathShaderProgram);
+  glUniform1i(glGetUniformLocation(pathShaderProgram, "dirt"), 0);
+  glUniform1i(glGetUniformLocation(pathShaderProgram, "noise"), 1);
 
   float lastFrame = 0.0f;
 
@@ -370,6 +473,9 @@ int main() {
     auto glView = toOpenGLMatrix(view);
     auto glProj = toOpenGLMatrix(projection);
 
+    // =====================================================================
+    // DESENHA AS ENTIDADES
+    // =====================================================================
     glUseProgram(objShaderProgram);
     unsigned int objViewLoc = glGetUniformLocation(objShaderProgram, "view");
     unsigned int objProjLoc = glGetUniformLocation(objShaderProgram, "projection");
@@ -381,8 +487,11 @@ int main() {
     Matrix<4, 4> identity = Matrix<4, 4>::identity();
     glUniformMatrix4fv(objModelLoc, 1, GL_FALSE, identity.getData());
 
-    teste.Draw();
+    test.Draw();
 
+    // =====================================================================
+    // DESENHA A GRAMA E A CURVA
+    // =====================================================================
     glUseProgram(shaderProgram);
 
     unsigned int viewLoc = glGetUniformLocation(shaderProgram, "view");
@@ -391,22 +500,67 @@ int main() {
     glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glView.data());
     glUniformMatrix4fv(projLoc, 1, GL_FALSE, glProj.data());
 
-    glBindVertexArray(VAO);
-    glDrawArrays(GL_LINES, 0, grid.size() / 3);
+    glUniform1i(glGetUniformLocation(shaderProgram, "grass"), 0);
+    glUniform1i(glGetUniformLocation(shaderProgram, "noise"), 1);
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, grassTexture);
+
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, noiseTexture);
+
+    glUniform1i(glGetUniformLocation(shaderProgram, "isGrass"), 1);
+
+    glBindVertexArray(grassVAO);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
 
     if (gAppConfig.showCurve) {
+      glUniform1i(glGetUniformLocation(shaderProgram, "isGrass"), 0);
       glBindVertexArray(curveVAO);
       glDrawArrays(GL_LINE_STRIP, 0, curveVertices.size() / 3);
     }
 
+    // =====================================================================
+    // DESENHA O CAMINHO DE TERRA
+    // =====================================================================
+    glUseProgram(pathShaderProgram);
+
+    unsigned int pathViewLoc = glGetUniformLocation(pathShaderProgram, "view");
+    unsigned int pathProjLoc = glGetUniformLocation(pathShaderProgram, "projection");
+    unsigned int pathModelLoc = glGetUniformLocation(pathShaderProgram, "model");
+
+    glUniformMatrix4fv(pathViewLoc, 1, GL_FALSE, glView.data());
+    glUniformMatrix4fv(pathProjLoc, 1, GL_FALSE, glProj.data());
+    glUniformMatrix4fv(pathModelLoc, 1, GL_FALSE, identity.getData());
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, dirtTexture);
+
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, noiseTexture);
+
+    pathMesh.Draw();
+
+    glDisable(GL_BLEND);
+
+    // =====================================================================
+    // ATUALIZA A TELA
+    // =====================================================================
     glfwSwapBuffers(window);
     glfwPollEvents();
   }
 
+  // =====================================================================
+  // LIMPEZA DE MEMÓRIA
+  // =====================================================================
   glDeleteProgram(objShaderProgram);
+  glDeleteProgram(pathShaderProgram);
   glDeleteProgram(shaderProgram);
-  glDeleteBuffers(1, &VBO);
-  glDeleteVertexArrays(1, &VAO);
+  glDeleteBuffers(1, &grassVBO);
+  glDeleteVertexArrays(1, &grassVAO);
   glfwDestroyWindow(window);
   glfwTerminate();
 }

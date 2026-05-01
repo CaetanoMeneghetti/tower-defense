@@ -2,12 +2,6 @@
 
 #include <cmath>
 
-namespace {
-  inline float dist(const Point &a, const Point &b) {
-    return std::sqrt((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y));
-  }
-}  // namespace
-
 std::vector<Point> generateCatmullRomVertices(const std::vector<Point> &controlPoints,
                                               int segmentsPerCurve) {
   std::vector<Point> vertices;

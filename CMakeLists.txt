@@ -13,6 +13,7 @@ set(SOURCES
   src/engine/parser.cpp
   src/engine/shader_utils.cpp
   src/utils/glad.c
+  src/world/path_generator.cpp
 )
 
 cmake_minimum_required(VERSION 3.5.0)
