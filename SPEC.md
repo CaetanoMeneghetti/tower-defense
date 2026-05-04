@@ -46,6 +46,8 @@ Meshes e texturas das unidades aliadas que serão utilizadas. No nosso jogo, cad
 ### Malhas poligonais complexas
 A grande maioria das malhas poligonais utilizadas no jogo serão extraídas do jogo Total War: Medieval II. o processo consiste em converter os arquivos binários de mesh do próprio jogo (.mesh) para formatos legíveis ao blender (.glb) por meio de ferramentas da comunidade (IWTE), possibilitando a manipulação das malhas e texturas no blender, para que no fim seja possível animar, além de manualmente no próprio blender, com ferramentas do tipo Mixamo e Accurig. Os arquivos finais, do tipo .fbx, serão lidos e interpretados por meio de um parser de uma lib (Assimp ou Autodesk FBX SDK).
 
+> Comentário Professor: Tomem cuidado com a licença de uso dos assets do jogo. Vocês provavelmente não podem distribuir os assets publicamente (não poderão colocar aqui no Github). Então no README precisam colocar instruções de como alguém que comprou o jogo pode extrair os assets para usar junto com o código de vocês. Para entrega final, podem colocar no Moodle um link privado com os assets, somente para correção.
+
 ### Transformações geométricas controladas pelo usuário
 O jogador usará o mouse para mover um modelo 3D da unidade "fantasma" antes de posicionar ela no campo de batalha, com as coordenadas X,Z atualizadas constantemente. Também será possível a rotação de construções e unidade em torno do seu eixo Y.
 
@@ -63,6 +65,8 @@ Será utilizado o termo especular (Blinn-Phong), termo ambiente e termo difuso (
 
 ### Mapeamento de texturas em todos os objetos
 Os modelos 3D dos soldados terão texturas  mapeadas para reprentar detalhes como a malha de aço da armadura, brasões de nações, e outras características. As texturas serão extraídas de maneira semelhante as malhas poligonais (arquivo .texture do jogo alvo -> .dds -> .png), o mapeamento UV dos assets é desconexo, portanto, será realizado o mapeamento e configuração manual da textura para o modelo.
+
+> Comentário Professor: o ideal seria extrair as coordenadas UV dos objetos originais. Tentar recriar as coordenadas UV manualmente ("configuração manual") pode ser um grande desafio.
 
 ### Movimentação com curva Bézier cúbica
 Serão utilizadas curvas de Catmull-Rom para definir o caminho padrão que os inimigos devem traçar até o objetivo.
