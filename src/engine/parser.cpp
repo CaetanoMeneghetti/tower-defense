@@ -50,5 +50,34 @@ bool Parser(const std::string &path, std::vector<Vertex> &out_vertices) {
     }
   }
 
+  // Se carregou vértices, centraliza a malha no eixo X e Z,
+  // e colocar os pés do modelo no Y = 0
+  if (!out_vertices.empty()) {
+    float minX = out_vertices[0].position.x, maxX = out_vertices[0].position.x;
+    float minY = out_vertices[0].position.y, maxY = out_vertices[0].position.y;
+    float minZ = out_vertices[0].position.z, maxZ = out_vertices[0].position.z;
+
+    // Delimita os limites de um cubo ao redor
+    for (const auto& v : out_vertices) {
+      if (v.position.x < minX) minX = v.position.x;
+      if (v.position.x > maxX) maxX = v.position.x;
+      if (v.position.y < minY) minY = v.position.y;
+      if (v.position.y > maxY) maxY = v.position.y;
+      if (v.position.z < minZ) minZ = v.position.z;
+      if (v.position.z > maxZ) maxZ = v.position.z;
+    }
+
+    float centerX = (minX + maxX) / 2.0f;
+    float centerZ = (minZ + maxZ) / 2.0f;
+
+    // Coloca o centro de X e Z em 0
+    // Coloca o mínimo de Y em 0
+    for (auto& v : out_vertices) {
+      v.position.x -= centerX;
+      v.position.y -= minY;
+      v.position.z -= centerZ;
+    }
+  }
+
   return true;
 }
