@@ -1,5 +1,7 @@
 #include "world/path_generator.h"
 
+int globalSeed = 42;
+
 // Gera a malha 3D (Mesh) do caminho de terra com bordas irregulares
 // Recebe uma lista de pontos centrais (a curva) e a largura base do caminho
 Mesh generatePathMesh(const std::vector<Point> &centerPoints, float baseWidth) {
@@ -9,6 +11,10 @@ Mesh generatePathMesh(const std::vector<Point> &centerPoints, float baseWidth) {
   if (centerPoints.size() < 2) {
     return Mesh(meshVertices);
   }
+
+  const int LEFT_OFFSET = 123; // Diferenciador para o lado esquerdo
+  const int RIGHT_OFFSET = 789; // Diferenciador para o lado direito
+  const float Y_HEIGHT = 0.1f; // Elevação para evitar Z-Fighting
 
   // Estrutura temporária para armazenar os dados de cada "fatia" do caminho
   // antes de transformá-los em triângulos para o OpenGL.
@@ -51,8 +57,8 @@ Mesh generatePathMesh(const std::vector<Point> &centerPoints, float baseWidth) {
 
     // Função geradora de aleatoriedade (Pseudo-Random Hash)
     // Transforma qualquer número inteiro (seed) em um valor caótico entre -1.0 e +1.0
-    auto random1D = [](int seed) -> float {
-      float val = std::sin(seed * 12.9898f) * 43758.5453f;
+    auto random1D = [&](int localSeed) -> float {
+      float val = std::sin((localSeed + globalSeed) * 12.9898f) * 43758.5453f;
       return (val - std::floor(val)) * 2.0f - 1.0f;
     };
 
@@ -74,15 +80,15 @@ Mesh generatePathMesh(const std::vector<Point> &centerPoints, float baseWidth) {
     // Aplica o ruído para a esquerda
     // Sorteia um valor pro ponto de trás (i0), um pro da frente (i1) e interpola
     float rLeft0 =
-        random1D(i0 + 123);  // Offset genérico (+123) para a esquerda ser única
-    float rLeft1 = random1D(i1 + 123);
+        random1D(i0 + LEFT_OFFSET);  // Offset genérico (+123) para a esquerda ser única
+    float rLeft1 = random1D(i1 + LEFT_OFFSET);
     float noiseLeft = (rLeft0 + (rLeft1 - rLeft0) * smoothT) * variance;
 
     // Aplica o ruído para a direita
     // Usa um offset diferente (+789) para a direita deformar de forma independente da
     // esquerda
-    float rRight0 = random1D(i0 + 789);
-    float rRight1 = random1D(i1 + 789);
+    float rRight0 = random1D(i0 + RIGHT_OFFSET);
+    float rRight1 = random1D(i1 + RIGHT_OFFSET);
     float noiseRight = (rRight0 + (rRight1 - rRight0) * smoothT) * variance;
 
     // Calcula a largura final baseada no ruído gerado
@@ -110,9 +116,6 @@ Mesh generatePathMesh(const std::vector<Point> &centerPoints, float baseWidth) {
   // CONSTRUIR A MALHA (Montar os Triângulos para o OpenGL)
   // =========================================================================
 
-  // Eleva o caminho 10cm acima do chão (grama) para evitar Z-Fighting (tela piscando)
-  float Y_ALTURA = 0.1f;
-
   // Percorre os nós de 2 em 2 para formar os quadrados (quads) que compõem o caminho
   for (size_t i = 0; i < nodes.size() - 1; ++i) {
     PathNode p1 = nodes[i];      // Fatias atuais
@@ -123,15 +126,15 @@ Mesh generatePathMesh(const std::vector<Point> &centerPoints, float baseWidth) {
 
     // Vértices do nó atual (p1)
     Vertex vLeft1 = {
-        {p1.leftVertex.x, Y_ALTURA, p1.leftVertex.y}, {0.0f, p1.v}, {0.0f, 1.0f, 0.0f}};
+        {p1.leftVertex.x, Y_HEIGHT, p1.leftVertex.y}, {0.0f, p1.v}, {0.0f, 1.0f, 0.0f}};
     Vertex vRight1 = {
-        {p1.rightVertex.x, Y_ALTURA, p1.rightVertex.y}, {1.0f, p1.v}, {0.0f, 1.0f, 0.0f}};
+        {p1.rightVertex.x, Y_HEIGHT, p1.rightVertex.y}, {1.0f, p1.v}, {0.0f, 1.0f, 0.0f}};
 
     // Vértices do próximo nó (p2)
     Vertex vLeft2 = {
-        {p2.leftVertex.x, Y_ALTURA, p2.leftVertex.y}, {0.0f, p2.v}, {0.0f, 1.0f, 0.0f}};
+        {p2.leftVertex.x, Y_HEIGHT, p2.leftVertex.y}, {0.0f, p2.v}, {0.0f, 1.0f, 0.0f}};
     Vertex vRight2 = {
-        {p2.rightVertex.x, Y_ALTURA, p2.rightVertex.y}, {1.0f, p2.v}, {0.0f, 1.0f, 0.0f}};
+        {p2.rightVertex.x, Y_HEIGHT, p2.rightVertex.y}, {1.0f, p2.v}, {0.0f, 1.0f, 0.0f}};
 
     // Monta o primeiro triângulo do segmento (sentido anti-horário)
     meshVertices.push_back(vLeft1);
