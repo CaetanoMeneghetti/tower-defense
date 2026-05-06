@@ -1,6 +1,7 @@
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 #include <glad/glad.h>
+#include <glm/gtc/type_ptr.hpp>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include <algorithm>
@@ -22,7 +23,8 @@
 #include "math/vector_ops.h"
 #include "stb_image.h"
 #include "world/path_generator.h"
-
+#include "engine/animatedmodel.h"
+#include <GLFW/glfw3.h>
 namespace {
 
   constexpr int kWindowWidth = 1920;
@@ -36,7 +38,7 @@ namespace {
   constexpr float kFovDegrees = 45.0f;
   constexpr float kNearPlane = 0.1f;
   constexpr float kFarPlane = 100.0f;
-  constexpr char kWindowTitle[] = "Tower Defense";
+  constexpr char kWindowTitle[] = "1346AD: Iron & Blood";
 
   struct AppState {
     // Modo de câmera
@@ -440,6 +442,7 @@ namespace {
     unsigned int grassTexture = loadTexture("data/textures/grass_color.png");
     unsigned int dirtTexture = loadTexture("data/textures/dirt_color.png");
     unsigned int noiseTexture = loadTexture("data/textures/perlin_noise.jpg", 3);
+    unsigned int npc1Texture = loadTexture("data/textures/npc1.png");
 
     // ---------------------------------------------------------------------
     // LOOP PRINCIPAL
@@ -447,8 +450,10 @@ namespace {
     Camera cam;
     Vector<3> cameraPosition{0.0f, 2.0f, 5.0f};
     Matrix<4, 4> identity = Matrix<4, 4>::identity();
+    
+    unsigned int shaderAnim = createShaderProgram("data/shaders/anim_shader.vert", "data/shaders/anim_shader.frag");
+    AnimatedModel testnpc("data/models/npc1.glb");
     float lastFrame = 0.0f;
-
     while (!glfwWindowShouldClose(window)) {
       const float currentFrame = static_cast<float>(glfwGetTime());
       const float deltaTime = currentFrame - lastFrame;
@@ -484,6 +489,41 @@ namespace {
       glUniformMatrix4fv(objU.projection, 1, GL_FALSE, glProj.data());
       glUniformMatrix4fv(objU.model, 1, GL_FALSE, identity.getData());
       testMesh.Draw();
+      glUseProgram(shaderAnim);
+      glUniformMatrix4fv(glGetUniformLocation(shaderAnim, "view"), 1, GL_FALSE, glView.data());
+      glUniformMatrix4fv(glGetUniformLocation(shaderAnim, "projection"), 1, GL_FALSE, glProj.data());
+      
+      Matrix<4, 4> npcModel = Matrix<4, 4>::identity();
+
+      
+      npcModel(1, 1) = 0.0f;
+      npcModel(2, 2) = 0.0f;
+
+      
+      npcModel(0, 0) =  0.01f; 
+      npcModel(1, 2) =  0.01f; 
+      npcModel(2, 1) = -0.01f; 
+      npcModel(3, 3) =  1.0f;  
+
+      
+      glUniformMatrix4fv(glGetUniformLocation(shaderAnim, "model"), 1, GL_FALSE, npcModel.getData());
+
+    testnpc.Update(deltaTime);
+
+    auto transforms = testnpc.GetBoneTransforms();
+    for (int i = 0; i < transforms.size(); ++i) {
+      std::string name = "finalBonesMatrices[" + std::to_string(i) + "]";
+      glUniformMatrix4fv(glGetUniformLocation(shaderAnim, name.c_str()), 1, GL_FALSE, glm::value_ptr(transforms[i]));
+    }
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, npc1Texture);
+    
+    glUniform1i(glGetUniformLocation(shaderAnim, "tex"), 0);
+
+    
+    testnpc.Draw(shaderAnim);
+
 
       // -------------------------------------------------------------------
       // CHÃO DE GRAMA
@@ -543,6 +583,7 @@ namespace {
     glDeleteTextures(1, &grassTexture);
     glDeleteTextures(1, &dirtTexture);
     glDeleteTextures(1, &noiseTexture);
+    glDeleteTextures(1, &npc1Texture);
 
     glDeleteVertexArrays(1, &grass.vao);
     glDeleteBuffers(1, &grass.vbo);
@@ -553,7 +594,7 @@ namespace {
     glDeleteProgram(objShader);
     glDeleteProgram(pathShader);
     glDeleteProgram(lineShader);
-
+    glDeleteProgram(shaderAnim);
     return 0;
   }
 

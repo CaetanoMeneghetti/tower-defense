@@ -12,6 +12,7 @@ set(SOURCES
   src/engine/mesh.cpp
   src/engine/parser.cpp
   src/engine/shader_utils.cpp
+  src/engine/animatedmodel.cpp
   src/utils/glad.c
   src/world/path_generator.cpp
 )
@@ -56,6 +57,29 @@ Por favor, atualize a lista de arquivos fonte no arquivo CMakeLists.txt.")
     break()
   endif()
 endforeach()
+
+include(FetchContent)
+#remoção de módulos inuteis pra compilar + rapido
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "Força biblioteca estática para fugir do erro do windres" FORCE)
+set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "testes do Assimp" FORCE)
+set(ASSIMP_BUILD_ASSIMP_TOOLS OFF CACHE BOOL "ferramentas de linha de comando" FORCE)
+set(ASSIMP_BUILD_ZLIB ON CACHE BOOL "Compilar o zlib internamente" FORCE)
+set(INJECT_DEBUG_POSTFIX OFF CACHE BOOL "Evita renomear a lib no modo debug" FORCE)
+
+FetchContent_declare(
+  assimp 
+  GIT_REPOSITORY https://github.com/assimp/assimp.git
+  GIT_TAG v5.4.1
+)
+
+
+if(MINGW OR CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+  # Injeta o big-obj diretamente nas variáveis globais do C++ para o Assimp não ignorar
+  string(APPEND CMAKE_CXX_FLAGS " -Wa,-mbig-obj")
+  string(APPEND CMAKE_C_FLAGS " -Wa,-mbig-obj")
+endif()
+
+FetchContent_MakeAvailable(assimp)
 
 add_executable(${EXECUTABLE_NAME} ${SOURCES})
 
@@ -107,7 +131,7 @@ if(WIN32)
 
   message(STATUS "LIBGLFW = ${LIBGLFW}")
 
-  target_link_libraries(${EXECUTABLE_NAME} ${LIBGLFW} gdi32 opengl32)
+  target_link_libraries(${EXECUTABLE_NAME} ${LIBGLFW} gdi32 opengl32 assimp::assimp)
 
 elseif(UNIX)
 
@@ -135,6 +159,7 @@ elseif(UNIX)
     ${X11_Xrandr_LIB}
     ${X11_Xcursor_LIB}
     ${X11_Xinerama_LIB}
+    assimp::assimp
   )
 
 endif()

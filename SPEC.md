@@ -29,17 +29,15 @@ https://www.youtube.com/watch?v=gBeI4md2ixE&t=189s, no minuto **2:00**. A temát
 
 ### Imagens
 
-Imagem 1:
+Imagem 1 - Mecânicas e funcionalidades:
 ![](Spec/imagem1.png)
-Mecânicas e funcionalidades:
 
-Imagem 2:
+Imagem 2 - Cenário principal:
 ![](Spec/imagem2.png)
-Cenário principal:
 
 Imagem 3:
-![](Spec/imagem3.png)
 Meshes e texturas das unidades aliadas que serão utilizadas. No nosso jogo, cada entidade será de um tipo diferente (extraídas do jogo Total War: Medieval II).
+![](Spec/imagem3.png)
 
 ## Especificação textual
 
