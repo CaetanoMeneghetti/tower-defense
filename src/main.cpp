@@ -17,6 +17,7 @@
 #include "engine/shader_utils.h"
 #include "math/constants.h"
 #include "math/matrix.h"
+#include "math/matrix_ops.h"
 #include "math/opengl_utils.h"
 #include "math/transforms.h"
 #include "math/vector.h"
@@ -204,6 +205,39 @@ namespace {
   }
 
   // =========================================================================
+  // MOVIMENTAÇÃO NO PATH
+  // =========================================================================
+
+  struct PathCache {
+    std::vector<float> accumulatedDistances;
+    float totalDistance = 0.0f;
+  };
+
+  // Pré-calcula a distância de cada ponto até o início da curva
+  PathCache buildPathCache(const std::vector<Point>& points) {
+    PathCache cache;
+    if (points.empty()) {
+      std::cerr << "Erro: nenhum ponto enviado para buildPathCache." << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+
+    // Primeiro valor sempre é 0
+    cache.accumulatedDistances.push_back(0.0f);
+    float total = 0.0f;
+
+    // Percorre os segmentos calculando o comprimento e acumulando distância
+    for (size_t i = 0; i < points.size() - 1; ++i) {
+      float dx = points[i + 1].x - points[i].x;
+      float dy = points[i + 1].y - points[i].y;
+      total += std::sqrt(dx * dx + dy * dy);
+      cache.accumulatedDistances.push_back(total);
+    }
+    
+    cache.totalDistance = total;
+    return cache;
+  }
+
+  // =========================================================================
   // CÂMERA ORBITAL
   // =========================================================================
 
@@ -329,6 +363,55 @@ namespace {
     }
   }
 
+  // bool hasReachedEnd é usado para detectar o final da curva
+  // Serve para saber quando o adversário chegou no objetivo
+  Vector<3> getPositionAtDistance(
+    const std::vector<Point> &points,
+    const PathCache &cache,
+    float distance,
+    float &outAngle,
+    bool &hasReachedEnd
+  ) {
+    // Caso inválido
+    if (points.size() < 2 || cache.totalDistance <= 0.0f) {
+      std::cerr << "Erro: path inválido." << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+
+    if (distance <= 0.0f) {
+      distance = 0.0f;
+    } else if (distance >= cache.totalDistance) {
+      distance = cache.totalDistance;
+      hasReachedEnd = true;
+    }
+
+    // Encontra o segmento em que o personagem está
+    auto it = std::upper_bound(cache.accumulatedDistances.begin(), cache.accumulatedDistances.end(), distance);
+    size_t i = std::distance(cache.accumulatedDistances.begin(), it) - 1;
+
+    // Proteção para não estourar o índice do vetor quando distance == totalDistance
+    if (i >= points.size() - 1) {
+      i = points.size() - 2;
+    }
+
+    // Encontra os pontos desse segmento
+    // O personagem está entre eles
+    Point p1 = points[i];
+    Point p2 = points[i + 1];
+
+    // Encontra a distância relativa
+    float distToP1 = distance - cache.accumulatedDistances[i];
+    float segLen = cache.accumulatedDistances[i + 1] - cache.accumulatedDistances[i];
+    float t = distToP1 / segLen;
+
+    // Atualiza com direção do movimento e ângulo
+    float dx = p2.x - p1.x;
+    float dy = p2.y - p1.y;
+    outAngle = std::atan2(dx, dy);
+
+    return {p1.x + dx * t, 0.1f, p1.y + dy * t};
+  }
+
   // =========================================================================
   // EXECUÇÃO PRINCIPAL
   // =========================================================================
@@ -432,6 +515,7 @@ namespace {
         {8.9474f, 1.9551f},    {10.0000f, 4.1615f}};
     std::vector<Point> curvePoints = generateCatmullRomVertices(controlPoints);
     GpuMesh curve = createCurveMesh(curvePoints);
+    PathCache curveCache = buildPathCache(curvePoints);
 
     Mesh pathMesh = generatePathMesh(curvePoints, 2.0f);
     Mesh testMesh(objVertices);
@@ -445,6 +529,12 @@ namespace {
     unsigned int npc1Texture = loadTexture("data/textures/npc1.png");
 
     // ---------------------------------------------------------------------
+    // MOVIMENTAÇÃO DO PERSONAGEM
+    // ---------------------------------------------------------------------
+    float characterDistance = 0.0f;
+    const float characterSpeed = 2.0f;
+
+    // ---------------------------------------------------------------------
     // LOOP PRINCIPAL
     // ---------------------------------------------------------------------
     Camera cam;
@@ -454,10 +544,22 @@ namespace {
     unsigned int shaderAnim = createShaderProgram("data/shaders/anim_shader.vert", "data/shaders/anim_shader.frag");
     AnimatedModel testnpc("data/models/npc1.glb");
     float lastFrame = 0.0f;
+
+    // ---- VARIÁVEIS DE CONTROLE DE TEMPO ----
+    const double targetFPS = 60.0;
+    const double frameDelay = 1.0 / targetFPS;
+    double lastTime = glfwGetTime();
     while (!glfwWindowShouldClose(window)) {
-      const float currentFrame = static_cast<float>(glfwGetTime());
-      const float deltaTime = currentFrame - lastFrame;
-      lastFrame = currentFrame;
+      double currentTime = glfwGetTime();
+
+      if (currentTime - lastTime < frameDelay) {
+          continue;
+      }
+
+      const float deltaTime = static_cast<float>(frameDelay);
+      lastTime += frameDelay;
+
+      characterDistance += characterSpeed * deltaTime;
 
       processInput(window, cameraPosition, deltaTime);
 
@@ -487,7 +589,16 @@ namespace {
       glUseProgram(objShader);
       glUniformMatrix4fv(objU.view, 1, GL_FALSE, glView.data());
       glUniformMatrix4fv(objU.projection, 1, GL_FALSE, glProj.data());
-      glUniformMatrix4fv(objU.model, 1, GL_FALSE, identity.getData());
+
+      float characterAngle = 0.0f;
+      bool hasReachedEnd = false;
+      Vector<3> characterPos = getPositionAtDistance(curvePoints, curveCache, characterDistance, characterAngle, hasReachedEnd);
+      Matrix<4, 4> characterTranslate = translate<4, 4>(characterPos[0], characterPos[1], characterPos[2]);
+      Matrix<4, 4> characterRotate = rotateY<4, 4>(characterAngle);
+      Matrix<4, 4> characterModel = characterTranslate * characterRotate;
+
+      auto glModel = toOpenGLMatrix(characterModel);
+      glUniformMatrix4fv(objU.model, 1, GL_FALSE, glModel.data());
       testMesh.Draw();
       glUseProgram(shaderAnim);
       glUniformMatrix4fv(glGetUniformLocation(shaderAnim, "view"), 1, GL_FALSE, glView.data());
@@ -571,6 +682,10 @@ namespace {
         glUniformMatrix4fv(lineU.projection, 1, GL_FALSE, glProj.data());
         glBindVertexArray(curve.vao);
         glDrawArrays(GL_LINE_STRIP, 0, curve.vertexCount);
+      }
+
+      if (hasReachedEnd) {
+        break;
       }
 
       glfwSwapBuffers(window);
