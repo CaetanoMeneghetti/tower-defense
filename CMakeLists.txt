@@ -11,6 +11,7 @@ set(SOURCES
   src/engine/catmull_rom.cpp
   src/engine/mesh.cpp
   src/engine/parser.cpp
+  src/engine/gameobject.cpp
   src/engine/shader_utils.cpp
   src/engine/animatedmodel.cpp
   src/utils/glad.c

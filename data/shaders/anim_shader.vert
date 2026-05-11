@@ -24,7 +24,7 @@ void main() {
     bool hasBones = false;
     
     for(int i = 0 ; i < MAX_BONE_INFLUENCE ; i++) {
-        if(boneIds[i] == -1) continue;
+        if(boneIds[i] == 0) continue;
         if(boneIds[i] >= MAX_BONES) break;
 
         hasBones = true;

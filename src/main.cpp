@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <iostream>
 #include <vector>
+#include <ctime>
 
 #include "engine/camera.h"
 #include "engine/catmull_rom.h"
@@ -25,7 +26,10 @@
 #include "stb_image.h"
 #include "world/path_generator.h"
 #include "engine/animatedmodel.h"
+#include "engine/gameobject.h"
 #include <GLFW/glfw3.h>
+
+
 namespace {
 
   constexpr int kWindowWidth = 1920;
@@ -409,7 +413,7 @@ namespace {
     float dy = p2.y - p1.y;
     outAngle = std::atan2(dx, dy);
 
-    return {p1.x + dx * t, 0.1f, p1.y + dy * t};
+    return {p1.x + dx * t, 0.1f, p1.y + dy * t}; 
   }
 
   // =========================================================================
@@ -499,6 +503,11 @@ namespace {
       return 1;
     }
 
+    std::vector<Vertex> bowVertices;
+    if (!Parser("data/models/Archer/bow.obj", bowVertices)) {
+      std::cout << "ERRO: Nao encontrou data/models/Archer/bow.obj" << std::endl;
+    }
+
     // ---------------------------------------------------------------------
     // GEOMETRIA
     // ---------------------------------------------------------------------
@@ -519,6 +528,7 @@ namespace {
 
     Mesh pathMesh = generatePathMesh(curvePoints, 2.0f);
     Mesh testMesh(objVertices);
+    Mesh bowMesh(bowVertices);
 
     // ---------------------------------------------------------------------
     // TEXTURAS
@@ -526,7 +536,8 @@ namespace {
     unsigned int grassTexture = loadTexture("data/textures/grass_color.png");
     unsigned int dirtTexture = loadTexture("data/textures/dirt_color.png");
     unsigned int noiseTexture = loadTexture("data/textures/perlin_noise.jpg", 3);
-    unsigned int npc1Texture = loadTexture("data/textures/npc1.png");
+    unsigned int archerTexture = loadTexture("data/textures/archer.png");
+    unsigned int bowTexture = loadTexture("data/textures/bow.jpg");
 
     // ---------------------------------------------------------------------
     // MOVIMENTAÇÃO DO PERSONAGEM
@@ -542,8 +553,21 @@ namespace {
     Matrix<4, 4> identity = Matrix<4, 4>::identity();
     
     unsigned int shaderAnim = createShaderProgram("data/shaders/anim_shader.vert", "data/shaders/anim_shader.frag");
-    AnimatedModel testnpc("data/models/npc1.glb");
-    float lastFrame = 0.0f;
+    AnimatedModel archerBase("data/models/Archer/ArcherT.glb");
+    
+    
+
+    archerBase.LoadAnimation("idle1", "data/models/Archer/Idle1.glb");
+    archerBase.LoadAnimation("idle2", "data/models/Archer/Idle2.glb");
+    archerBase.LoadAnimation("idle3", "data/models/Archer/Idle3.glb");
+    archerBase.LoadAnimation("idle4", "data/models/Archer/Idle4.glb");
+    archerBase.LoadAnimation("aim", "data/models/Archer/AimDraw.glb");
+    std::vector<GameObject> defenders;
+
+   
+    defenders.push_back(GameObject(&archerBase, Vector<3>{ 0.0f, 0.1f, 0.0f }));
+    
+    defenders.back().SetIdleAnimations({"aim"});
 
     // ---- VARIÁVEIS DE CONTROLE DE TEMPO ----
     const double targetFPS = 60.0;
@@ -557,6 +581,12 @@ namespace {
       }
 
       const float deltaTime = static_cast<float>(frameDelay);
+      
+      for (auto& unit : defenders) {
+          unit.Update(deltaTime);
+      }
+      
+      
       lastTime += frameDelay;
 
       characterDistance += characterSpeed * deltaTime;
@@ -594,8 +624,9 @@ namespace {
       bool hasReachedEnd = false;
       Vector<3> characterPos = getPositionAtDistance(curvePoints, curveCache, characterDistance, characterAngle, hasReachedEnd);
       Matrix<4, 4> characterTranslate = translate<4, 4>(characterPos[0], characterPos[1], characterPos[2]);
-      Matrix<4, 4> characterRotate = rotateY<4, 4>(characterAngle);
-      Matrix<4, 4> characterModel = characterTranslate * characterRotate;
+      Matrix<4, 4> characterRotateY = rotateY<4, 4>(characterAngle);
+      Matrix<4, 4> characterRotateX = rotateX<4, 4>(-math_constants::kHalfPi); 
+      Matrix<4, 4> characterModel = characterTranslate * characterRotateY * characterRotateX;
 
       auto glModel = toOpenGLMatrix(characterModel);
       glUniformMatrix4fv(objU.model, 1, GL_FALSE, glModel.data());
@@ -603,37 +634,54 @@ namespace {
       glUseProgram(shaderAnim);
       glUniformMatrix4fv(glGetUniformLocation(shaderAnim, "view"), 1, GL_FALSE, glView.data());
       glUniformMatrix4fv(glGetUniformLocation(shaderAnim, "projection"), 1, GL_FALSE, glProj.data());
-      
-      Matrix<4, 4> npcModel = Matrix<4, 4>::identity();
 
       
-      npcModel(1, 1) = 0.0f;
-      npcModel(2, 2) = 0.0f;
 
       
-      npcModel(0, 0) =  0.01f; 
-      npcModel(1, 2) =  0.01f; 
-      npcModel(2, 1) = -0.01f; 
-      npcModel(3, 3) =  1.0f;  
-
-      
-      glUniformMatrix4fv(glGetUniformLocation(shaderAnim, "model"), 1, GL_FALSE, npcModel.getData());
-
-    testnpc.Update(deltaTime);
-
-    auto transforms = testnpc.GetBoneTransforms();
-    for (int i = 0; i < transforms.size(); ++i) {
-      std::string name = "finalBonesMatrices[" + std::to_string(i) + "]";
-      glUniformMatrix4fv(glGetUniformLocation(shaderAnim, name.c_str()), 1, GL_FALSE, glm::value_ptr(transforms[i]));
-    }
-
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, npc1Texture);
-    
-    glUniform1i(glGetUniformLocation(shaderAnim, "tex"), 0);
+      glUseProgram(shaderAnim);
+      glUniformMatrix4fv(glGetUniformLocation(shaderAnim, "view"), 1, GL_FALSE, glView.data());
+      glUniformMatrix4fv(glGetUniformLocation(shaderAnim, "projection"), 1, GL_FALSE, glProj.data());
 
     
-    testnpc.Draw(shaderAnim);
+      glActiveTexture(GL_TEXTURE0);
+      glBindTexture(GL_TEXTURE_2D, archerTexture);
+      glUniform1i(glGetUniformLocation(shaderAnim, "tex"), 0);
+
+     
+      for (auto& unit : defenders) {
+          unit.Draw(shaderAnim);
+      }
+      glUseProgram(objShader);
+      glUniformMatrix4fv(objU.view, 1, GL_FALSE, glView.data());
+      glUniformMatrix4fv(objU.projection, 1, GL_FALSE, glProj.data());
+
+      for (auto& unit : defenders) {
+          
+          glm::mat4 handWorldMatrix = unit.GetBoneWorldTransform("mixamorig:LeftHand");
+
+          
+          glm::mat4 offset = glm::mat4(0.0f); 
+          float s = 5.0f; 
+
+          offset[0][2] = s;  
+          offset[1][1] = s;  
+          offset[2][0] = -s;  
+          offset[3][3] = 1.0f;
+
+          offset[3][0] = 0.0f; offset[3][1] = -7.0f; offset[3][2] = 0.0f;
+          glm::mat4 finalBowMatrix = handWorldMatrix * offset;
+
+          
+
+          glUniformMatrix4fv(objU.model, 1, GL_FALSE, glm::value_ptr(finalBowMatrix));
+          
+          
+          glActiveTexture(GL_TEXTURE0);
+          glBindTexture(GL_TEXTURE_2D, bowTexture);
+          glUniform1i(glGetUniformLocation(objShader, "tex"), 0);
+
+          bowMesh.Draw();
+      }
 
 
       // -------------------------------------------------------------------
@@ -698,7 +746,7 @@ namespace {
     glDeleteTextures(1, &grassTexture);
     glDeleteTextures(1, &dirtTexture);
     glDeleteTextures(1, &noiseTexture);
-    glDeleteTextures(1, &npc1Texture);
+    glDeleteTextures(1, &archerTexture);
 
     glDeleteVertexArrays(1, &grass.vao);
     glDeleteBuffers(1, &grass.vbo);
@@ -719,7 +767,7 @@ int main() {
   if (!glfwInit()) {
     return 1;
   }
-
+  srand(static_cast<unsigned int>(time(NULL)));
   glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
