@@ -9,6 +9,7 @@ set(SOURCES
   src/main.cpp
   src/engine/camera.cpp
   src/engine/catmull_rom.cpp
+  src/engine/lighting.cpp
   src/engine/mesh.cpp
   src/engine/parser.cpp
   src/engine/gameobject.cpp

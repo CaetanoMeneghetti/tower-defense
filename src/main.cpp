@@ -13,6 +13,7 @@
 
 #include "engine/camera.h"
 #include "engine/catmull_rom.h"
+#include "engine/lighting.h"
 #include "engine/mesh.h"
 #include "engine/parser.h"
 #include "engine/shader_utils.h"
@@ -236,7 +237,7 @@ namespace {
       total += std::sqrt(dx * dx + dy * dy);
       cache.accumulatedDistances.push_back(total);
     }
-    
+
     cache.totalDistance = total;
     return cache;
   }
@@ -413,7 +414,7 @@ namespace {
     float dy = p2.y - p1.y;
     outAngle = std::atan2(dx, dy);
 
-    return {p1.x + dx * t, 0.1f, p1.y + dy * t}; 
+    return {p1.x + dx * t, 0.1f, p1.y + dy * t};
   }
 
   // =========================================================================
@@ -551,11 +552,9 @@ namespace {
     Camera cam;
     Vector<3> cameraPosition{0.0f, 2.0f, 5.0f};
     Matrix<4, 4> identity = Matrix<4, 4>::identity();
-    
+
     unsigned int shaderAnim = createShaderProgram("data/shaders/anim_shader.vert", "data/shaders/anim_shader.frag");
     AnimatedModel archerBase("data/models/Archer/ArcherT.glb");
-    
-    
 
     archerBase.LoadAnimation("idle1", "data/models/Archer/Idle1.glb");
     archerBase.LoadAnimation("idle2", "data/models/Archer/Idle2.glb");
@@ -564,10 +563,23 @@ namespace {
     archerBase.LoadAnimation("aim", "data/models/Archer/AimDraw.glb");
     std::vector<GameObject> defenders;
 
-   
+
     defenders.push_back(GameObject(&archerBase, Vector<3>{ 0.0f, 0.1f, 0.0f }));
-    
+
     defenders.back().SetIdleAnimations({"aim"});
+
+    // ---------------------------------------------------------------------
+    // LUZ DIRECIONAL — lua noturna (fria, azulada)
+    // Iluminação principal será das lanternas quando adicionadas.
+    // ---------------------------------------------------------------------
+    DirectionalLight moonLight;
+    moonLight.direction = glm::normalize(glm::vec3(-0.4f, 1.2f, -0.5f));
+    // Sombras
+    moonLight.ambient   = glm::vec3(0.07f, 0.08f, 0.14f);
+    // Difuso
+    moonLight.diffuse   = glm::vec3(0.26f, 0.28f, 0.42f);
+    // Especular
+    moonLight.specular  = glm::vec3(0.14f, 0.16f, 0.26f);
 
     // ---- VARIÁVEIS DE CONTROLE DE TEMPO ----
     const double targetFPS = 60.0;
@@ -581,19 +593,20 @@ namespace {
       }
 
       const float deltaTime = static_cast<float>(frameDelay);
-      
+
       for (auto& unit : defenders) {
           unit.Update(deltaTime);
       }
-      
-      
+
+
       lastTime += frameDelay;
 
       characterDistance += characterSpeed * deltaTime;
 
       processInput(window, cameraPosition, deltaTime);
 
-      glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+      // Céu noturno — combina com o ambient azulado da lua
+      glClearColor(0.015f, 0.018f, 0.045f, 1.0f);
       glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
       // Aspect ratio respeita o tamanho atual da janela (resize callback)
@@ -613,10 +626,13 @@ namespace {
       auto glView = toOpenGLMatrix(cam.getViewMatrix());
       auto glProj = toOpenGLMatrix(cam.getProjectionMatrix());
 
+      const glm::vec3 glmViewPos(cameraPosition[0], cameraPosition[1], cameraPosition[2]);
+
       // -------------------------------------------------------------------
       // ENTIDADES OPACAS
       // -------------------------------------------------------------------
       glUseProgram(objShader);
+      applyDirectionalLight(objShader, moonLight, glmViewPos);
       glUniformMatrix4fv(objU.view, 1, GL_FALSE, glView.data());
       glUniformMatrix4fv(objU.projection, 1, GL_FALSE, glProj.data());
 
@@ -625,57 +641,48 @@ namespace {
       Vector<3> characterPos = getPositionAtDistance(curvePoints, curveCache, characterDistance, characterAngle, hasReachedEnd);
       Matrix<4, 4> characterTranslate = translate<4, 4>(characterPos[0], characterPos[1], characterPos[2]);
       Matrix<4, 4> characterRotateY = rotateY<4, 4>(characterAngle);
-      Matrix<4, 4> characterRotateX = rotateX<4, 4>(-math_constants::kHalfPi); 
+      Matrix<4, 4> characterRotateX = rotateX<4, 4>(-math_constants::kHalfPi);
       Matrix<4, 4> characterModel = characterTranslate * characterRotateY * characterRotateX;
 
       auto glModel = toOpenGLMatrix(characterModel);
       glUniformMatrix4fv(objU.model, 1, GL_FALSE, glModel.data());
       testMesh.Draw();
       glUseProgram(shaderAnim);
+      applyDirectionalLight(shaderAnim, moonLight, glmViewPos);
       glUniformMatrix4fv(glGetUniformLocation(shaderAnim, "view"), 1, GL_FALSE, glView.data());
       glUniformMatrix4fv(glGetUniformLocation(shaderAnim, "projection"), 1, GL_FALSE, glProj.data());
 
-      
 
-      
-      glUseProgram(shaderAnim);
-      glUniformMatrix4fv(glGetUniformLocation(shaderAnim, "view"), 1, GL_FALSE, glView.data());
-      glUniformMatrix4fv(glGetUniformLocation(shaderAnim, "projection"), 1, GL_FALSE, glProj.data());
-
-    
       glActiveTexture(GL_TEXTURE0);
       glBindTexture(GL_TEXTURE_2D, archerTexture);
       glUniform1i(glGetUniformLocation(shaderAnim, "tex"), 0);
 
-     
       for (auto& unit : defenders) {
           unit.Draw(shaderAnim);
       }
       glUseProgram(objShader);
+      applyDirectionalLight(objShader, moonLight, glmViewPos);
       glUniformMatrix4fv(objU.view, 1, GL_FALSE, glView.data());
       glUniformMatrix4fv(objU.projection, 1, GL_FALSE, glProj.data());
 
       for (auto& unit : defenders) {
-          
+
           glm::mat4 handWorldMatrix = unit.GetBoneWorldTransform("mixamorig:LeftHand");
 
-          
-          glm::mat4 offset = glm::mat4(0.0f); 
-          float s = 5.0f; 
 
-          offset[0][2] = s;  
-          offset[1][1] = s;  
-          offset[2][0] = -s;  
+          glm::mat4 offset = glm::mat4(0.0f);
+          float s = 5.0f;
+
+          offset[0][2] = s;
+          offset[1][1] = s;
+          offset[2][0] = -s;
           offset[3][3] = 1.0f;
 
           offset[3][0] = 0.0f; offset[3][1] = -7.0f; offset[3][2] = 0.0f;
           glm::mat4 finalBowMatrix = handWorldMatrix * offset;
 
-          
-
           glUniformMatrix4fv(objU.model, 1, GL_FALSE, glm::value_ptr(finalBowMatrix));
-          
-          
+
           glActiveTexture(GL_TEXTURE0);
           glBindTexture(GL_TEXTURE_2D, bowTexture);
           glUniform1i(glGetUniformLocation(objShader, "tex"), 0);
@@ -683,11 +690,11 @@ namespace {
           bowMesh.Draw();
       }
 
-
       // -------------------------------------------------------------------
       // CHÃO DE GRAMA
       // -------------------------------------------------------------------
       glUseProgram(groundShader);
+      applyDirectionalLight(groundShader, moonLight, glmViewPos);
       glUniformMatrix4fv(groundU.view, 1, GL_FALSE, glView.data());
       glUniformMatrix4fv(groundU.projection, 1, GL_FALSE, glProj.data());
 
@@ -703,6 +710,7 @@ namespace {
       // CAMINHO DE TERRA
       // -------------------------------------------------------------------
       glUseProgram(pathShader);
+      applyDirectionalLight(pathShader, moonLight, glmViewPos);
       glUniformMatrix4fv(pathU.view, 1, GL_FALSE, glView.data());
       glUniformMatrix4fv(pathU.projection, 1, GL_FALSE, glProj.data());
       glUniformMatrix4fv(pathU.model, 1, GL_FALSE, identity.getData());

@@ -1,4 +1,4 @@
-Os prompts não mencionados aqui são aqueles em que o código gerado pela ferramenta de IA foi significativamente minoritário na tarefa ou quando foi documentado no commit (que contém a palavra "PROMPT"). Nesse caso, o prompt está destacado no corpo do commit. 
+Os prompts não mencionados aqui são aqueles em que o código gerado pela ferramenta de IA foi significativamente minoritário na tarefa ou quando foi documentado no commit (que contém a palavra "PROMPT"). Nesse caso, o prompt está destacado no corpo do commit.
 
 ---
 
@@ -12,3 +12,8 @@ Resultado (que foi comentado e levemente adaptado): função **generatePathMesh*
 
 Resultado (que foi comentado e levemente adaptado): arquivo *grass.frag*.
 
+---
+
+**PROMPT**: Corrija minha implementação de Blinn-Phong. Termos ambiente + difuso (Lambert) + especular. Também modifique a main para já usar a versão que fiz, e sugira parâmetros iniciais para eu ajustar. Coloque comentários nos parâmetros, para facilitar o uso deles.
+
+Resultado: mudanças leves na implementação do Blinn-Phong em cada shader .vert (**calcDirLight**) e aplicação do modelo em **main_cpp**.
