@@ -142,7 +142,13 @@ namespace {
     }
 
     const int actualChannels = (forcedChannels != 0) ? forcedChannels : channels;
-    const GLenum format = (actualChannels == 4) ? GL_RGBA : GL_RGB;
+    GLenum format;
+    switch (actualChannels) {
+        case 1:  format = GL_RED;  break;
+        case 2:  format = GL_RG;   break;
+        case 4:  format = GL_RGBA; break;
+        default: format = GL_RGB;  break;
+    }
 
     glTexImage2D(GL_TEXTURE_2D, 0, format, w, h, 0, format, GL_UNSIGNED_BYTE, data);
     glGenerateMipmap(GL_TEXTURE_2D);
@@ -486,10 +492,18 @@ namespace {
     glUseProgram(groundShader);
     glUniform1i(groundU.grass, 0);
     glUniform1i(groundU.noise, 1);
+    glUniform1i(glGetUniformLocation(groundShader, "normalMap"),       2);
+    glUniform1i(glGetUniformLocation(groundShader, "aoMap"),           3);
+    glUniform1i(glGetUniformLocation(groundShader, "roughnessMap"),    4);
+    glUniform1i(glGetUniformLocation(groundShader, "displacementMap"), 5);
 
     glUseProgram(pathShader);
     glUniform1i(pathU.dirt, 0);
     glUniform1i(pathU.noise, 1);
+    glUniform1i(glGetUniformLocation(pathShader, "normalMap"),       2);
+    glUniform1i(glGetUniformLocation(pathShader, "aoMap"),           3);
+    glUniform1i(glGetUniformLocation(pathShader, "roughnessMap"),    4);
+    glUniform1i(glGetUniformLocation(pathShader, "displacementMap"), 5);
 
     // ---------------------------------------------------------------------
     // CARREGA OBJ ANTES DE ALOCAR MAIS RECURSOS GL
@@ -534,11 +548,19 @@ namespace {
     // ---------------------------------------------------------------------
     // TEXTURAS
     // ---------------------------------------------------------------------
-    unsigned int grassTexture = loadTexture("data/textures/grass_color.png");
-    unsigned int dirtTexture = loadTexture("data/textures/dirt_color.png");
-    unsigned int noiseTexture = loadTexture("data/textures/perlin_noise.jpg", 3);
-    unsigned int archerTexture = loadTexture("data/textures/archer.png");
-    unsigned int bowTexture = loadTexture("data/textures/bow.jpg");
+    unsigned int grassTexture        = loadTexture("data/textures/grass_color.png");
+    unsigned int grassNormalTex      = loadTexture("data/textures/grass_normal.png");
+    unsigned int grassAOTex          = loadTexture("data/textures/grass_ambient_occlusion.png");
+    unsigned int grassRoughnessTex   = loadTexture("data/textures/grass_roughness.png");
+    unsigned int grassDisplacementTex= loadTexture("data/textures/grass_displacement.png");
+    unsigned int dirtTexture          = loadTexture("data/textures/dirt_color.png");
+    unsigned int dirtNormalTex        = loadTexture("data/textures/dirt_normal.png");
+    unsigned int dirtAOTex            = loadTexture("data/textures/dirt_ambient_occlusion.png");
+    unsigned int dirtRoughnessTex     = loadTexture("data/textures/dirt_roughness.png");
+    unsigned int dirtDisplacementTex  = loadTexture("data/textures/dirt_displacement.png");
+    unsigned int noiseTexture        = loadTexture("data/textures/perlin_noise.jpg", 3);
+    unsigned int archerTexture       = loadTexture("data/textures/archer.png");
+    unsigned int bowTexture          = loadTexture("data/textures/bow.jpg");
 
     // ---------------------------------------------------------------------
     // MOVIMENTAÇÃO DO PERSONAGEM
@@ -577,7 +599,7 @@ namespace {
     // Sombras
     moonLight.ambient   = glm::vec3(0.07f, 0.08f, 0.14f);
     // Difuso
-    moonLight.diffuse   = glm::vec3(0.26f, 0.28f, 0.42f);
+    moonLight.diffuse   = glm::vec3(0.56f, 0.58f, 0.82f);
     // Especular
     moonLight.specular  = glm::vec3(0.14f, 0.16f, 0.26f);
 
@@ -702,6 +724,14 @@ namespace {
       glBindTexture(GL_TEXTURE_2D, grassTexture);
       glActiveTexture(GL_TEXTURE1);
       glBindTexture(GL_TEXTURE_2D, noiseTexture);
+      glActiveTexture(GL_TEXTURE2);
+      glBindTexture(GL_TEXTURE_2D, grassNormalTex);
+      glActiveTexture(GL_TEXTURE3);
+      glBindTexture(GL_TEXTURE_2D, grassAOTex);
+      glActiveTexture(GL_TEXTURE4);
+      glBindTexture(GL_TEXTURE_2D, grassRoughnessTex);
+      glActiveTexture(GL_TEXTURE5);
+      glBindTexture(GL_TEXTURE_2D, grassDisplacementTex);
 
       glBindVertexArray(grass.vao);
       glDrawArrays(GL_TRIANGLES, 0, grass.vertexCount);
@@ -723,6 +753,14 @@ namespace {
       glBindTexture(GL_TEXTURE_2D, dirtTexture);
       glActiveTexture(GL_TEXTURE1);
       glBindTexture(GL_TEXTURE_2D, noiseTexture);
+      glActiveTexture(GL_TEXTURE2);
+      glBindTexture(GL_TEXTURE_2D, dirtNormalTex);
+      glActiveTexture(GL_TEXTURE3);
+      glBindTexture(GL_TEXTURE_2D, dirtAOTex);
+      glActiveTexture(GL_TEXTURE4);
+      glBindTexture(GL_TEXTURE_2D, dirtRoughnessTex);
+      glActiveTexture(GL_TEXTURE5);
+      glBindTexture(GL_TEXTURE_2D, dirtDisplacementTex);
 
       pathMesh.Draw();
 
@@ -752,7 +790,15 @@ namespace {
     // LIMPEZA DE RECURSOS GL
     // ---------------------------------------------------------------------
     glDeleteTextures(1, &grassTexture);
+    glDeleteTextures(1, &grassNormalTex);
+    glDeleteTextures(1, &grassAOTex);
+    glDeleteTextures(1, &grassRoughnessTex);
+    glDeleteTextures(1, &grassDisplacementTex);
     glDeleteTextures(1, &dirtTexture);
+    glDeleteTextures(1, &dirtNormalTex);
+    glDeleteTextures(1, &dirtAOTex);
+    glDeleteTextures(1, &dirtRoughnessTex);
+    glDeleteTextures(1, &dirtDisplacementTex);
     glDeleteTextures(1, &noiseTexture);
     glDeleteTextures(1, &archerTexture);
 

@@ -7,9 +7,12 @@ in vec3 FragPos;
 
 uniform sampler2D grass;
 uniform sampler2D noise;
+uniform sampler2D normalMap;
+uniform sampler2D aoMap;
+uniform sampler2D roughnessMap;
+uniform sampler2D displacementMap;
 uniform vec3 viewPos;
 
-// Luz direcional (sol/lua)
 struct DirLight {
     vec3 direction;
     vec3 ambient;
@@ -38,25 +41,13 @@ const float MASK_MAX = 0.7;
 const float MACRO_NOISE_SCALE  = 0.013;
 const vec2  MACRO_NOISE_OFFSET = vec2(7.3, 3.1);
 
-const vec3  TINT_SECO  = vec3(0.96, 0.94, 0.83);
-const vec3  TINT_VIVO  = vec3(0.94, 1.02, 0.92);
-const float MACRO_MIN  = 0.35;
-const float MACRO_MAX  = 0.65;
-
-const float SHININESS = 8.0;
-
-vec3 calcDirLight(vec3 norm, vec3 viewDir, vec3 matColor) {
-    vec3 lDir     = normalize(light.direction);
-    vec3 ambient  = light.ambient * matColor;
-    float diff    = max(dot(norm, lDir), 0.0);
-    vec3 diffuse  = light.diffuse * diff * matColor;
-    vec3 halfDir  = normalize(lDir + viewDir);
-    float spec    = pow(max(dot(norm, halfDir), 0.0), SHININESS);
-    vec3 specular = light.specular * spec;
-    return ambient + diffuse + specular;
-}
+const vec3  TINT_SECO = vec3(0.96, 0.94, 0.83);
+const vec3  TINT_VIVO = vec3(0.94, 1.02, 0.92);
+const float MACRO_MIN = 0.35;
+const float MACRO_MAX = 0.65;
 
 void main() {
+  // --- cor base: blending de 3 camadas com noise ---
   vec3 grass1 = texture(grass, texCoord).rgb;
 
   vec2 uv2    = ROT1 * texCoord * UV_SCALE_1 + UV_OFFSET_1;
@@ -75,9 +66,35 @@ void main() {
       texture(noise, texCoord * MACRO_NOISE_SCALE + MACRO_NOISE_OFFSET).r);
   baseColor *= mix(TINT_SECO, TINT_VIVO, macroMask);
 
-  // Normal fixa pra cima — plano horizontal sem normal no VBO
-  vec3 norm    = vec3(0.0, 1.0, 0.0);
+  // --- mapas PBR ---
+
+  // Displacement: pontas da grama (height=1) mais claras, base (height=0) mais escura
+  float height = texture(displacementMap, texCoord).r;
+  baseColor *= mix(0.78, 1.08, height);
+
+  float ao        = texture(aoMap, texCoord).r;
+  float roughness = texture(roughnessMap, texCoord).r;
+  float shininess = mix(16.0, 1.0, roughness);
+
+  // --- normal map: espaço tangente → espaço mundo ---
+  // Plano horizontal: T aponta +X (direção U), B aponta -Z (direção V), N aponta +Y
+  vec3 tn  = texture(normalMap, texCoord).rgb * 2.0 - 1.0;
+  mat3 TBN = mat3(
+      vec3(1.0, 0.0,  0.0),   // tangente
+      vec3(0.0, 0.0, -1.0),   // bitangente
+      vec3(0.0, 1.0,  0.0)    // normal
+  );
+  vec3 norm    = normalize(TBN * tn);
   vec3 viewDir = normalize(viewPos - FragPos);
 
-  fragColor = vec4(calcDirLight(norm, viewDir, baseColor), 1.0);
+  // --- Blinn-Phong com AO só no ambiente ---
+  vec3 lDir     = normalize(light.direction);
+  vec3 ambient  = light.ambient * baseColor * ao;  // oclusão só afeta luz indireta
+  float diff    = max(dot(norm, lDir), 0.0);
+  vec3 diffuse  = light.diffuse * diff * baseColor;
+  vec3 halfDir  = normalize(lDir + viewDir);
+  float spec    = pow(max(dot(norm, halfDir), 0.0), shininess);
+  vec3 specular = light.specular * spec;
+
+  fragColor = vec4(ambient + diffuse + specular, 1.0);
 }
