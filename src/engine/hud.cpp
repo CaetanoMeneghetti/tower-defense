@@ -4,13 +4,11 @@
 #include <imgui_impl_opengl3.h>
 
 Hud::Hud() {}
-
 Hud::~Hud() {}
 
 void Hud::Init(GLFWwindow* window) {
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
-    
     ImGuiIO& io = ImGui::GetIO(); (void)io;
     io.IniFilename = nullptr; 
 
@@ -20,10 +18,12 @@ void Hud::Init(GLFWwindow* window) {
     SetupStyle();
 }
 
+void Hud::SetTextures(const HudTextures& textures) {
+    m_textures = textures;
+}
+
 void Hud::SetupStyle() {
     ImGuiStyle& style = ImGui::GetStyle();
-    
-    // CORES
     style.Colors[ImGuiCol_WindowBg]      = ImVec4(0.12f, 0.08f, 0.05f, 0.95f);
     style.Colors[ImGuiCol_Border]        = ImVec4(0.40f, 0.25f, 0.15f, 1.00f);
     style.Colors[ImGuiCol_Text]          = ImVec4(0.90f, 0.85f, 0.75f, 1.00f);
@@ -39,14 +39,110 @@ void Hud::Render(const AppState& state, float fps) {
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
 
-    ImGuiWindowFlags flags = ImGuiWindowFlags_AlwaysAutoResize | 
-                             ImGuiWindowFlags_NoSavedSettings | 
-                             ImGuiWindowFlags_NoCollapse | 
-                             ImGuiWindowFlags_NoMove;
+    ImGuiWindowFlags topFlags = ImGuiWindowFlags_NoDecoration | 
+                                ImGuiWindowFlags_NoSavedSettings | 
+                                ImGuiWindowFlags_NoMove;
 
-    ImGui::SetNextWindowPos(ImVec2(10.0f, 10.0f), ImGuiCond_Always);
+    float topBarHeight = 90.0f; // Aumentei um pouco para caber as molduras
+    ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2((float)state.fbWidth, topBarHeight), ImGuiCond_Always);
 
-    if (ImGui::Begin("1346AD: Iron & Blood", nullptr, flags)) {
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0, 0, 0, 0)); 
+
+    if (ImGui::Begin("TopBar", nullptr, topFlags)) {
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        ImVec2 p0 = ImGui::GetWindowPos();
+        ImVec2 pMax = ImVec2(p0.x + state.fbWidth, p0.y + topBarHeight);
+
+        // 1. Desenha o Mapa de Fundo
+        drawList->AddImage((void*)(intptr_t)m_textures.topBackground, p0, pMax);
+
+        // 2. Overlay pra borda
+        drawList->AddRect(p0, pMax, IM_COL32(60, 40, 20, 200), 0.0f, 0, 4.0f);
+
+        // ---------------------------------------------------------
+        // ÁREA DE STATUS (Vida e Ouro) e tbm Fundo de Contraste
+        // ---------------------------------------------------------
+        ImVec2 statusAreaPos = ImVec2(p0.x + 10, p0.y + 10);
+        ImVec2 statusAreaSize = ImVec2(220, topBarHeight - 20);
+        
+        // Retângulo escuro atrás do texto para leitura (Preto transparente)
+        drawList->AddRectFilled(statusAreaPos, 
+                                ImVec2(statusAreaPos.x + statusAreaSize.x, statusAreaPos.y + statusAreaSize.y), 
+                                IM_COL32(0, 0, 0, 150), 10.0f); // 10.0f é o arredondamento
+
+        ImGui::SetCursorPos(ImVec2(25.0f, 20.0f));
+        ImGui::Image((void*)(intptr_t)m_textures.healthIcon, ImVec2(24, 24));
+        ImGui::SameLine();
+        ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 4.0f);
+        ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "%d", state.health);
+
+        ImGui::SetCursorPos(ImVec2(25.0f, 50.0f));
+        ImGui::Image((void*)(intptr_t)m_textures.goldIcon, ImVec2(24, 24));
+        ImGui::SameLine();
+        ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 4.0f);
+        ImGui::TextColored(ImVec4(1.0f, 0.9f, 0.1f, 1.0f), "%d GP", state.gold);
+
+        // ---------------------------------------------------------
+        // SELETOR DE TORRES
+        // ---------------------------------------------------------
+        float itemWidth = 80.0f;
+        float totalWidth = itemWidth * 3; // Supondo 3 slots de torre
+        float startX = (state.fbWidth / 2.0f) - (totalWidth / 2.0f);
+
+        for (int i = 0; i < 3; i++) {
+            float slotX = startX + (i * itemWidth);
+            
+            // Desenha um "Slot" (moldura) para a torre
+            drawList->AddRectFilled(ImVec2(slotX + 5, p0.y + 10), 
+                                    ImVec2(slotX + itemWidth - 5, p0.y + topBarHeight - 10), 
+                                    IM_COL32(40, 30, 20, 180), 5.0f);
+
+            // Desenha Separador Vertical (Linha de ferro/madeira)
+            if (i < 2) {
+                drawList->AddLine(ImVec2(slotX + itemWidth, p0.y + 15), 
+                                  ImVec2(slotX + itemWidth, p0.y + topBarHeight - 15), 
+                                  IM_COL32(100, 80, 50, 255), 2.0f);
+            }
+
+            
+            if (i == 0) {
+                ImGui::SetCursorPos(ImVec2(slotX + (itemWidth - 60.0f) / 2.0f, (topBarHeight - 60.0f) / 2.0f));
+                
+                // Se estiver selecionado, desenha um brilho em volta
+                // if (state.selectedTower == ARCHER) { 
+                //    drawList->AddRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax(), IM_COL32(255, 255, 0, 200), 5.0f, 0, 3.0f);
+                // }
+
+                ImGui::ImageButton("btn_archer", (void*)(intptr_t)m_textures.archerIcon, ImVec2(50, 50));
+            }
+        }
+
+        // ---------------------------------------------------------
+        // INFO DA WAVE
+        // ---------------------------------------------------------
+        ImGui::SetCursorPos(ImVec2(state.fbWidth - 150.0f, 35.0f));
+        ImGui::Text("ONDADA: 1 / 10");
+    }
+    ImGui::End();
+    ImGui::PopStyleColor();
+    ImGui::PopStyleVar();
+    
+
+
+    // ====================================================================
+    // HUD DE DEBUG
+    // ====================================================================
+    ImGuiWindowFlags debugFlags = ImGuiWindowFlags_AlwaysAutoResize | 
+                                  ImGuiWindowFlags_NoSavedSettings | 
+                                  ImGuiWindowFlags_NoCollapse | 
+                                  ImGuiWindowFlags_NoMove;
+
+    // Movido para baixo para não sobrepor a Top Bar
+    ImGui::SetNextWindowPos(ImVec2(10.0f, topBarHeight + 10.0f), ImGuiCond_Always);
+
+    if (ImGui::Begin("Debug", nullptr, debugFlags)) {
         ImGui::Text("FPS: %.1f", fps);
         ImGui::Separator();
         

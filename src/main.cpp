@@ -423,6 +423,13 @@ namespace {
 
     Hud gameHud;
     gameHud.Init(window);
+    //passar pra um loader dedicado depois
+    HudTextures uiTextures;
+      uiTextures.topBackground = loadTexture("data/textures/ui_topbg.png", 4);
+      uiTextures.goldIcon      = loadTexture("data/textures/ui_gold.png", 4);
+      uiTextures.healthIcon    = loadTexture("data/textures/ui_health.png", 4);
+      uiTextures.archerIcon    = loadTexture("data/textures/ui_archer.png", 4);
+      gameHud.SetTextures(uiTextures);
 
     // ---------------------------------------------------------------------
     // SHADERS
@@ -716,7 +723,9 @@ namespace {
 
       glBindVertexArray(grass.vao);
       glDrawArrays(GL_TRIANGLES, 0, grass.vertexCount);
-
+      
+      
+      
       // -------------------------------------------------------------------
       // CAMINHO DE TERRA
       // -------------------------------------------------------------------
