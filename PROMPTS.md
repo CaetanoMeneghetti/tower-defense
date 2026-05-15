@@ -23,3 +23,15 @@ Resultado: mudanças leves na implementação do Blinn-Phong em cada shader .ver
 **PROMPT**: De que forma posso implementar uma neblina para esconder o fim do mapa, fazendo com que seja mais difícil de enxergar a borda dele?
 
 Resultado: Ajustes (corrigiu a antiga e gerou a linha atual) nas variáveis `fogFactor`, `litColor` e `finalColor` em *grass.frag*.
+
+---
+
+PROMPT: Preciso que você implemente o carregamento de modelos .glb usando a biblioteca Assimp. A ideia é criar uma classe AnimatedModel que consiga ler a hierarquia dos ossos e as animações do arquivo. O código precisa calcular a interpolação entre os frames (movimento e rotação com quaternions) para que a animação fique fluida. No final, o código deve me entregar um array de matrizes pronto para eu enviar para o meu shader de skinning no OpenGL.
+
+Resultado: extração dos canais de animação (aiNodeAnim) e um vector mat4 com as matrizes de ossos interpoladas do arquivo.
+
+---
+
+PROMPT: Implemente uma lógica na classe GameObject para eu conseguir "grudar" um objeto (tipo uma arma ou um item) na mão do personagem. Eu preciso de uma função que pegue a posição global de um osso específico do modelo animado e combine isso com a posição do personagem no mundo. O objetivo é que, se o personagem estiver se movendo e a animação da mão balançar, o item acompanhe exatamente esse movimento.
+
+Resultado: O método GetBoneWorldTransform que multiplica a matriz de transformação global do GameObject (Posição/Rotação/Escala no mundo) pela matriz global do nó do osso extraída da hierarquia do Assimp.
