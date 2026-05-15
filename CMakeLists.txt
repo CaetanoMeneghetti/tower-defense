@@ -13,10 +13,18 @@ set(SOURCES
   src/engine/mesh.cpp
   src/engine/parser.cpp
   src/engine/gameobject.cpp
+  src/engine/hud.cpp
   src/engine/shader_utils.cpp
   src/engine/animatedmodel.cpp
   src/utils/glad.c
   src/world/path_generator.cpp
+  src/imgui/imgui.cpp
+  src/imgui/imgui_draw.cpp
+  src/imgui/imgui_tables.cpp
+  src/imgui/imgui_widgets.cpp
+  src/imgui/imgui_impl_glfw.cpp
+  src/imgui/imgui_impl_opengl3.cpp
+  
 )
 
 cmake_minimum_required(VERSION 3.5.0)
@@ -91,7 +99,10 @@ add_custom_command(TARGET ${EXECUTABLE_NAME} POST_BUILD
           $<TARGET_FILE_DIR:${EXECUTABLE_NAME}>/data
 )
 
-target_include_directories(${EXECUTABLE_NAME} BEFORE PRIVATE ${PROJECT_SOURCE_DIR}/include)
+target_include_directories(${EXECUTABLE_NAME} BEFORE PRIVATE 
+    ${PROJECT_SOURCE_DIR}/include
+    ${PROJECT_SOURCE_DIR}/src/imgui
+)
 
 if(WIN32)
 

@@ -11,6 +11,8 @@
 #include <vector>
 #include <ctime>
 
+#include "engine/app_state.h"
+#include "engine/hud.h"
 #include "engine/camera.h"
 #include "engine/catmull_rom.h"
 #include "engine/lighting.h"
@@ -45,30 +47,6 @@ namespace {
   constexpr float kNearPlane = 0.1f;
   constexpr float kFarPlane = 100.0f;
   constexpr char kWindowTitle[] = "1346AD: Iron & Blood";
-
-  struct AppState {
-    // Modo de câmera
-    bool useFreeCamera = false;
-    bool cPressed = false;
-    bool showCurve = false;
-    bool tPressed = false;
-
-    // Câmera livre
-    float yaw = -math_constants::kHalfPi;
-    float pitch = 0.0f;
-    float lastX = kWindowWidth / 2.0f;
-    float lastY = kWindowHeight / 2.0f;
-    bool firstMouse = true;
-
-    // Câmera orbital
-    float orbitYaw = 0.0f;
-    float orbitPitch = math_constants::kPi / 6.0f;
-    float orbitRadius = 10.0f;
-
-    // Tamanho atual do framebuffer (atualizado pelo resize callback)
-    int fbWidth = kWindowWidth;
-    int fbHeight = kWindowHeight;
-  };
 
   struct GroundUniforms {
     GLint view;
@@ -443,6 +421,9 @@ namespace {
     glfwSetScrollCallback(window, scrollCallback);
     glfwSetFramebufferSizeCallback(window, framebufferSizeCallback);
 
+    Hud gameHud;
+    gameHud.Init(window);
+
     // ---------------------------------------------------------------------
     // SHADERS
     // ---------------------------------------------------------------------
@@ -778,6 +759,9 @@ namespace {
         glDrawArrays(GL_LINE_STRIP, 0, curve.vertexCount);
       }
 
+      float currentFps = 1.0f / deltaTime;
+      gameHud.Render(state, currentFps);
+
       if (hasReachedEnd) {
         break;
       }
@@ -789,6 +773,7 @@ namespace {
     // ---------------------------------------------------------------------
     // LIMPEZA DE RECURSOS GL
     // ---------------------------------------------------------------------
+    gameHud.Shutdown();
     glDeleteTextures(1, &grassTexture);
     glDeleteTextures(1, &grassNormalTex);
     glDeleteTextures(1, &grassAOTex);
