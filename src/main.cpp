@@ -396,7 +396,7 @@ namespace {
     // Atualiza com direção do movimento e ângulo
     float dx = p2.x - p1.x;
     float dy = p2.y - p1.y;
-    outAngle = std::atan2(dx, dy);
+    outAngle = std::atan2(-dx, dy);
 
     return {p1.x + dx * t, 0.1f, p1.y + dy * t};
   }
@@ -494,17 +494,14 @@ namespace {
     glUniform1i(glGetUniformLocation(pathShader, "displacementMap"), 5);
 
     // ---------------------------------------------------------------------
-    // CARREGA OBJ ANTES DE ALOCAR MAIS RECURSOS GL
+    // CARREGA OBJ/GLB ANTES DE ALOCAR MAIS RECURSOS GL 
     // ---------------------------------------------------------------------
     std::vector<Vertex> objVertices;
-    if (!Parser("data/models/test.obj", objVertices)) {
-      std::cout << "ERRO: Nao encontrou data/models/test.obj" << std::endl;
-      glDeleteProgram(groundShader);
-      glDeleteProgram(objShader);
-      glDeleteProgram(pathShader);
-      glDeleteProgram(lineShader);
-      return 1;
-    }
+    AnimatedModel enemyBase("data/models/zombie/zombieT.glb");
+    enemyBase.LoadAnimation("run", "data/models/zombie/zombieRun.glb"); 
+    GameObject enemyRunner(&enemyBase, Vector<3>{0.0f, 0.0f, 0.0f});
+    enemyRunner.SetIdleAnimations({"run"});
+    unsigned int enemyTexture = loadTexture("data/textures/zombie.png");
 
     std::vector<Vertex> bowVertices;
     if (!Parser("data/models/Archer/bow.obj", bowVertices)) {
@@ -530,7 +527,7 @@ namespace {
     PathCache curveCache = buildPathCache(curvePoints);
 
     Mesh pathMesh = generatePathMesh(curvePoints, 2.0f);
-    Mesh testMesh(objVertices);
+    
     Mesh bowMesh(bowVertices);
 
     // ---------------------------------------------------------------------
@@ -607,6 +604,7 @@ namespace {
       for (auto& unit : defenders) {
           unit.Update(deltaTime);
       }
+      enemyRunner.Update(deltaTime);
 
 
       lastTime += frameDelay;
@@ -641,22 +639,30 @@ namespace {
       // -------------------------------------------------------------------
       // ENTIDADES OPACAS
       // -------------------------------------------------------------------
-      glUseProgram(objShader);
-      applyDirectionalLight(objShader, moonLight, glmViewPos);
-      glUniformMatrix4fv(objU.view, 1, GL_FALSE, glView.data());
-      glUniformMatrix4fv(objU.projection, 1, GL_FALSE, glProj.data());
-
       float characterAngle = 0.0f;
       bool hasReachedEnd = false;
       Vector<3> characterPos = getPositionAtDistance(curvePoints, curveCache, characterDistance, characterAngle, hasReachedEnd);
+      
       Matrix<4, 4> characterTranslate = translate<4, 4>(characterPos[0], characterPos[1], characterPos[2]);
       Matrix<4, 4> characterRotateY = rotateY<4, 4>(characterAngle);
       Matrix<4, 4> characterRotateX = rotateX<4, 4>(-math_constants::kHalfPi);
       Matrix<4, 4> characterModel = characterTranslate * characterRotateY * characterRotateX;
-
       auto glModel = toOpenGLMatrix(characterModel);
-      glUniformMatrix4fv(objU.model, 1, GL_FALSE, glModel.data());
-      testMesh.Draw();
+
+      // Mudança obj estático pra glb com animação
+      glUseProgram(shaderAnim);
+      applyDirectionalLight(shaderAnim, moonLight, glmViewPos);
+      glUniformMatrix4fv(glGetUniformLocation(shaderAnim, "view"), 1, GL_FALSE, glView.data());
+      glUniformMatrix4fv(glGetUniformLocation(shaderAnim, "projection"), 1, GL_FALSE, glProj.data());
+
+      
+      glActiveTexture(GL_TEXTURE0);
+      glBindTexture(GL_TEXTURE_2D, enemyTexture); 
+      glUniform1i(glGetUniformLocation(shaderAnim, "tex"), 0);
+      enemyRunner.position = characterPos;
+      enemyRunner.rotationY = characterAngle;
+      enemyRunner.Draw(shaderAnim);
+
       glUseProgram(shaderAnim);
       applyDirectionalLight(shaderAnim, moonLight, glmViewPos);
       glUniformMatrix4fv(glGetUniformLocation(shaderAnim, "view"), 1, GL_FALSE, glView.data());
@@ -723,7 +729,6 @@ namespace {
 
       glBindVertexArray(grass.vao);
       glDrawArrays(GL_TRIANGLES, 0, grass.vertexCount);
-      
       
       
       // -------------------------------------------------------------------

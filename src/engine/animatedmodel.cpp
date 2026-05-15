@@ -149,9 +149,29 @@ void AnimatedModel::SetupMesh() {
 
 const aiNodeAnim* AnimatedModel::FindNodeAnim(const aiAnimation* animation, const std::string& nodeName) {
     if (!animation) return nullptr;
+
+
     for (unsigned int i = 0; i < animation->mNumChannels; i++) {
-        if (std::string(animation->mChannels[i]->mNodeName.data) == nodeName) return animation->mChannels[i];
+        if (std::string(animation->mChannels[i]->mNodeName.data) == nodeName) {
+            return animation->mChannels[i];
+        }
     }
+
+    
+    auto cleanName = [](const std::string& name) {
+        size_t pos = name.find(':');
+        return (pos != std::string::npos) ? name.substr(pos + 1) : name;
+    };
+
+    std::string cleanTarget = cleanName(nodeName);
+
+    for (unsigned int i = 0; i < animation->mNumChannels; i++) {
+        std::string channelName = animation->mChannels[i]->mNodeName.data;
+        if (cleanName(channelName) == cleanTarget) {
+            return animation->mChannels[i];
+        }
+    }
+
     return nullptr;
 }
 
