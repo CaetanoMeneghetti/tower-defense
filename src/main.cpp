@@ -53,9 +53,12 @@ namespace {
     GLint projection;
     GLint grass;
     GLint noise;
+    GLint fogColor;
+    GLint fogStart;
+    GLint fogEnd;
 
-    GroundUniforms(GLint v, GLint p, GLint g, GLint n)
-      : view(v), projection(p), grass(g), noise(n) {}
+    GroundUniforms(GLint v, GLint p, GLint g, GLint n, GLint fc, GLint fs, GLint fe)
+      : view(v), projection(p), grass(g), noise(n), fogColor(fc), fogStart(fs), fogEnd(fe) {}
   };
 
   struct ObjUniforms {
@@ -73,9 +76,12 @@ namespace {
     GLint model;
     GLint dirt;
     GLint noise;
+    GLint fogColor;
+    GLint fogStart;
+    GLint fogEnd;
 
-    PathUniforms(GLint v, GLint p, GLint m, GLint d, GLint n)
-    : view(v), projection(p), model(m), dirt(d), noise(n) {}
+    PathUniforms(GLint v, GLint p, GLint m, GLint d, GLint n, GLint fc, GLint fs, GLint fe)
+    : view(v), projection(p), model(m), dirt(d), noise(n), fogColor(fc), fogStart(fs), fogEnd(fe) {}
   };
 
   struct LineUniforms {
@@ -136,20 +142,49 @@ namespace {
     return tex;
   }
 
-  // Cria um plano [-20, 20] no XZ com UVs, usado como chão de grama.
+  GpuMesh createSkyboxMesh() {
+      GpuMesh m;
+      float vertices[] = {
+          // Posições X, Y, Z
+          -1.0f,  1.0f, -1.0f,  -1.0f, -1.0f, -1.0f,   1.0f, -1.0f, -1.0f,
+          1.0f, -1.0f, -1.0f,   1.0f,  1.0f, -1.0f,  -1.0f,  1.0f, -1.0f,
+          -1.0f, -1.0f,  1.0f,  -1.0f, -1.0f, -1.0f,  -1.0f,  1.0f, -1.0f,
+          -1.0f,  1.0f, -1.0f,  -1.0f,  1.0f,  1.0f,  -1.0f, -1.0f,  1.0f,
+          1.0f, -1.0f, -1.0f,   1.0f, -1.0f,  1.0f,   1.0f,  1.0f,  1.0f,
+          1.0f,  1.0f,  1.0f,   1.0f,  1.0f, -1.0f,   1.0f, -1.0f, -1.0f,
+          -1.0f, -1.0f,  1.0f,  -1.0f,  1.0f,  1.0f,   1.0f,  1.0f,  1.0f,
+          1.0f,  1.0f,  1.0f,   1.0f, -1.0f,  1.0f,  -1.0f, -1.0f,  1.0f,
+          -1.0f,  1.0f, -1.0f,   1.0f,  1.0f, -1.0f,   1.0f,  1.0f,  1.0f,
+          1.0f,  1.0f,  1.0f,  -1.0f,  1.0f,  1.0f,  -1.0f,  1.0f, -1.0f,
+          -1.0f, -1.0f, -1.0f,  -1.0f, -1.0f,  1.0f,   1.0f, -1.0f, -1.0f,
+          1.0f, -1.0f, -1.0f,  -1.0f, -1.0f,  1.0f,   1.0f, -1.0f,  1.0f
+      };
+
+      glGenVertexArrays(1, &m.vao);
+      glGenBuffers(1, &m.vbo);
+      glBindVertexArray(m.vao);
+      glBindBuffer(GL_ARRAY_BUFFER, m.vbo);
+      glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+      glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+      glEnableVertexAttribArray(0);
+      m.vertexCount = 36;
+      return m;
+  }
+
+  // Cria um plano [-200, 200] no XZ com UVs, usado como chão de grama.
   GpuMesh createGrassMesh() {
     GpuMesh m;
     // clang-format off
     static const float vertices[] = {
-    // X,     Y,     Z,        U,      V
+      // X,     Y,     Z,        U,      V
       // Primeiro triângulo
-      -20.0f, 0.0f, -20.0f,     0.0f,  20.0f,  // Trás esquerda
-       20.0f, 0.0f, -20.0f,    20.0f,  20.0f,  // Trás direita
-      -20.0f, 0.0f,  20.0f,     0.0f,   0.0f,  // Frente esquerda
+      -200.0f, 0.0f, -200.0f,    0.0f,   200.0f,   // Trás esquerda
+       200.0f, 0.0f, -200.0f,    200.0f, 200.0f,   // Trás direita
+      -200.0f, 0.0f,  200.0f,    0.0f,   0.0f,     // Frente esquerda
       // Segundo triângulo
-       20.0f, 0.0f, -20.0f,    20.0f,  20.0f,  // Trás direita
-       20.0f, 0.0f,  20.0f,    20.0f,   0.0f,  // Frente direita
-      -20.0f, 0.0f,  20.0f,     0.0f,   0.0f,  // Frente esquerda
+       200.0f, 0.0f, -200.0f,    200.0f, 200.0f,   // Trás direita
+       200.0f, 0.0f,  200.0f,    200.0f, 0.0f,     // Frente direita
+      -200.0f, 0.0f,  200.0f,    0.0f,   0.0f,     // Frente esquerda
     };
     // clang-format on
 
@@ -438,10 +473,13 @@ namespace {
     // objShader:    entidades
     // pathShader:   caminho de terra
     // lineShader:   curva-guia amarela
+    // skyShader:    céu estrelado
     unsigned int groundShader = createShaderProgram("data/shaders/grass.vert", "data/shaders/grass.frag");
     unsigned int objShader = createShaderProgram("data/shaders/shader.vert", "data/shaders/shader.frag");
     unsigned int pathShader = createShaderProgram("data/shaders/path.vert", "data/shaders/path.frag");
     unsigned int lineShader = createShaderProgram("data/shaders/line.vert", "data/shaders/line.frag");
+    unsigned int skyShader = createShaderProgram("data/shaders/sky.vert", "data/shaders/sky.frag");
+
 
     if (!groundShader || !objShader || !pathShader || !lineShader) {
       std::cout << "ERRO: Falha ao criar um ou mais shaders" << std::endl;
@@ -457,7 +495,10 @@ namespace {
         glGetUniformLocation(groundShader, "view"),
         glGetUniformLocation(groundShader, "projection"),
         glGetUniformLocation(groundShader, "grass"),
-        glGetUniformLocation(groundShader, "noise"),
+      glGetUniformLocation(groundShader, "noise"),
+      glGetUniformLocation(groundShader, "fogColor"),
+      glGetUniformLocation(groundShader, "fogStart"),
+      glGetUniformLocation(groundShader, "fogEnd"),
     };
     ObjUniforms objU{
         glGetUniformLocation(objShader, "view"),
@@ -469,12 +510,19 @@ namespace {
         glGetUniformLocation(pathShader, "projection"),
         glGetUniformLocation(pathShader, "model"),
         glGetUniformLocation(pathShader, "dirt"),
-        glGetUniformLocation(pathShader, "noise"),
+      glGetUniformLocation(pathShader, "noise"),
+      glGetUniformLocation(pathShader, "fogColor"),
+      glGetUniformLocation(pathShader, "fogStart"),
+      glGetUniformLocation(pathShader, "fogEnd"),
     };
     LineUniforms lineU{
         glGetUniformLocation(lineShader, "view"),
         glGetUniformLocation(lineShader, "projection"),
     };
+
+    const glm::vec3 fogColor(0.02f, 0.03f, 0.07f);
+    const float fogStart = 60.0f;
+    const float fogEnd = 160.0f;
 
     // Texture units são constantes — setamos uma vez só (era refeito todo frame).
     glUseProgram(groundShader);
@@ -484,6 +532,9 @@ namespace {
     glUniform1i(glGetUniformLocation(groundShader, "aoMap"),           3);
     glUniform1i(glGetUniformLocation(groundShader, "roughnessMap"),    4);
     glUniform1i(glGetUniformLocation(groundShader, "displacementMap"), 5);
+    glUniform3fv(groundU.fogColor, 1, glm::value_ptr(fogColor));
+    glUniform1f(groundU.fogStart, fogStart);
+    glUniform1f(groundU.fogEnd, fogEnd);
 
     glUseProgram(pathShader);
     glUniform1i(pathU.dirt, 0);
@@ -492,13 +543,16 @@ namespace {
     glUniform1i(glGetUniformLocation(pathShader, "aoMap"),           3);
     glUniform1i(glGetUniformLocation(pathShader, "roughnessMap"),    4);
     glUniform1i(glGetUniformLocation(pathShader, "displacementMap"), 5);
+    glUniform3fv(pathU.fogColor, 1, glm::value_ptr(fogColor));
+    glUniform1f(pathU.fogStart, fogStart);
+    glUniform1f(pathU.fogEnd, fogEnd);
 
     // ---------------------------------------------------------------------
-    // CARREGA OBJ/GLB ANTES DE ALOCAR MAIS RECURSOS GL 
+    // CARREGA OBJ/GLB ANTES DE ALOCAR MAIS RECURSOS GL
     // ---------------------------------------------------------------------
     std::vector<Vertex> objVertices;
     AnimatedModel enemyBase("data/models/zombie/zombieT.glb");
-    enemyBase.LoadAnimation("run", "data/models/zombie/zombieRun.glb"); 
+    enemyBase.LoadAnimation("run", "data/models/zombie/zombieRun.glb");
     GameObject enemyRunner(&enemyBase, Vector<3>{0.0f, 0.0f, 0.0f});
     enemyRunner.SetIdleAnimations({"run"});
     unsigned int enemyTexture = loadTexture("data/textures/zombie.png");
@@ -527,25 +581,31 @@ namespace {
     PathCache curveCache = buildPathCache(curvePoints);
 
     Mesh pathMesh = generatePathMesh(curvePoints, 2.0f);
-    
+
     Mesh bowMesh(bowVertices);
 
     // ---------------------------------------------------------------------
     // TEXTURAS
     // ---------------------------------------------------------------------
-    unsigned int grassTexture        = loadTexture("data/textures/grass_color.png");
-    unsigned int grassNormalTex      = loadTexture("data/textures/grass_normal.png");
-    unsigned int grassAOTex          = loadTexture("data/textures/grass_ambient_occlusion.png");
-    unsigned int grassRoughnessTex   = loadTexture("data/textures/grass_roughness.png");
-    unsigned int grassDisplacementTex= loadTexture("data/textures/grass_displacement.png");
+    unsigned int grassTexture         = loadTexture("data/textures/grass_color.png");
+    unsigned int grassNormalTex       = loadTexture("data/textures/grass_normal.png");
+    unsigned int grassAOTex           = loadTexture("data/textures/grass_ambient_occlusion.png");
+    unsigned int grassRoughnessTex    = loadTexture("data/textures/grass_roughness.png");
+    unsigned int grassDisplacementTex = loadTexture("data/textures/grass_displacement.png");
     unsigned int dirtTexture          = loadTexture("data/textures/dirt_color.png");
     unsigned int dirtNormalTex        = loadTexture("data/textures/dirt_normal.png");
     unsigned int dirtAOTex            = loadTexture("data/textures/dirt_ambient_occlusion.png");
     unsigned int dirtRoughnessTex     = loadTexture("data/textures/dirt_roughness.png");
     unsigned int dirtDisplacementTex  = loadTexture("data/textures/dirt_displacement.png");
-    unsigned int noiseTexture        = loadTexture("data/textures/perlin_noise.jpg", 3);
-    unsigned int archerTexture       = loadTexture("data/textures/archer.png");
-    unsigned int bowTexture          = loadTexture("data/textures/bow.jpg");
+    unsigned int noiseTexture         = loadTexture("data/textures/perlin_noise.jpg", 3);
+    unsigned int archerTexture        = loadTexture("data/textures/archer.png");
+    unsigned int bowTexture           = loadTexture("data/textures/bow.jpg");
+    unsigned int skyTexture           = loadTexture("data/textures/night_sky_tonemapped.jpg");
+
+    GpuMesh skyMesh = createSkyboxMesh();
+    GLint skyViewLoc = glGetUniformLocation(skyShader, "view");
+    GLint skyProjLoc = glGetUniformLocation(skyShader, "projection");
+    GLint skyTexLoc  = glGetUniformLocation(skyShader, "skyTexture");
 
     // ---------------------------------------------------------------------
     // MOVIMENTAÇÃO DO PERSONAGEM
@@ -569,7 +629,6 @@ namespace {
     archerBase.LoadAnimation("idle4", "data/models/Archer/Idle4.glb");
     archerBase.LoadAnimation("aim", "data/models/Archer/AimDraw.glb");
     std::vector<GameObject> defenders;
-
 
     defenders.push_back(GameObject(&archerBase, Vector<3>{ 0.0f, 0.1f, 0.0f }));
 
@@ -606,7 +665,6 @@ namespace {
       }
       enemyRunner.Update(deltaTime);
 
-
       lastTime += frameDelay;
 
       characterDistance += characterSpeed * deltaTime;
@@ -614,7 +672,8 @@ namespace {
       processInput(window, cameraPosition, deltaTime);
 
       // Céu noturno — combina com o ambient azulado da lua
-      glClearColor(0.015f, 0.018f, 0.045f, 1.0f);
+      // SOBREPOSTO PELA TEXTURA DO CÉU
+      glClearColor(fogColor.r, fogColor.g, fogColor.b, 1.0f);
       glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
       // Aspect ratio respeita o tamanho atual da janela (resize callback)
@@ -642,7 +701,7 @@ namespace {
       float characterAngle = 0.0f;
       bool hasReachedEnd = false;
       Vector<3> characterPos = getPositionAtDistance(curvePoints, curveCache, characterDistance, characterAngle, hasReachedEnd);
-      
+
       Matrix<4, 4> characterTranslate = translate<4, 4>(characterPos[0], characterPos[1], characterPos[2]);
       Matrix<4, 4> characterRotateY = rotateY<4, 4>(characterAngle);
       Matrix<4, 4> characterRotateX = rotateX<4, 4>(-math_constants::kHalfPi);
@@ -655,9 +714,9 @@ namespace {
       glUniformMatrix4fv(glGetUniformLocation(shaderAnim, "view"), 1, GL_FALSE, glView.data());
       glUniformMatrix4fv(glGetUniformLocation(shaderAnim, "projection"), 1, GL_FALSE, glProj.data());
 
-      
+
       glActiveTexture(GL_TEXTURE0);
-      glBindTexture(GL_TEXTURE_2D, enemyTexture); 
+      glBindTexture(GL_TEXTURE_2D, enemyTexture);
       glUniform1i(glGetUniformLocation(shaderAnim, "tex"), 0);
       enemyRunner.position = characterPos;
       enemyRunner.rotationY = characterAngle;
@@ -668,7 +727,6 @@ namespace {
       glUniformMatrix4fv(glGetUniformLocation(shaderAnim, "view"), 1, GL_FALSE, glView.data());
       glUniformMatrix4fv(glGetUniformLocation(shaderAnim, "projection"), 1, GL_FALSE, glProj.data());
 
-
       glActiveTexture(GL_TEXTURE0);
       glBindTexture(GL_TEXTURE_2D, archerTexture);
       glUniform1i(glGetUniformLocation(shaderAnim, "tex"), 0);
@@ -676,15 +734,14 @@ namespace {
       for (auto& unit : defenders) {
           unit.Draw(shaderAnim);
       }
+
       glUseProgram(objShader);
       applyDirectionalLight(objShader, moonLight, glmViewPos);
       glUniformMatrix4fv(objU.view, 1, GL_FALSE, glView.data());
       glUniformMatrix4fv(objU.projection, 1, GL_FALSE, glProj.data());
 
       for (auto& unit : defenders) {
-
           glm::mat4 handWorldMatrix = unit.GetBoneWorldTransform("mixamorig:LeftHand");
-
 
           glm::mat4 offset = glm::mat4(0.0f);
           float s = 5.0f;
@@ -729,8 +786,12 @@ namespace {
 
       glBindVertexArray(grass.vao);
       glDrawArrays(GL_TRIANGLES, 0, grass.vertexCount);
-      
-      
+
+      glBindTexture(GL_TEXTURE_2D, skyTexture);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+
       // -------------------------------------------------------------------
       // CAMINHO DE TERRA
       // -------------------------------------------------------------------
@@ -763,7 +824,30 @@ namespace {
       glDisable(GL_BLEND);
 
       // -------------------------------------------------------------------
-      // 4. CURVA
+      // CÉU NOTURNO
+      // -------------------------------------------------------------------
+      glDepthFunc(GL_LEQUAL);
+      glUseProgram(skyShader);
+
+      Matrix<4, 4> viewMatrix = cam.getViewMatrix();
+      viewMatrix(0, 3) = 0.0f; // Zera translação X
+      viewMatrix(1, 3) = 0.0f; // Zera translação Y
+      viewMatrix(2, 3) = 0.0f; // Zera translação Z
+      auto glSkyView = toOpenGLMatrix(viewMatrix);
+
+      glUniformMatrix4fv(skyViewLoc, 1, GL_FALSE, glSkyView.data());
+      glUniformMatrix4fv(skyProjLoc, 1, GL_FALSE, glProj.data());
+      glUniform1i(skyTexLoc, 0);
+
+      glActiveTexture(GL_TEXTURE0);
+      glBindTexture(GL_TEXTURE_2D, skyTexture);
+
+      glBindVertexArray(skyMesh.vao);
+      glDrawArrays(GL_TRIANGLES, 0, 36);
+      glDepthFunc(GL_LESS);
+
+      // -------------------------------------------------------------------
+      // CURVA
       // -------------------------------------------------------------------
       if (state.showCurve) {
         glUseProgram(lineShader);

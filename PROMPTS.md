@@ -17,3 +17,9 @@ Resultado (que foi comentado e levemente adaptado): arquivo *grass.frag*.
 **PROMPT**: Corrija minha implementação de Blinn-Phong. Termos ambiente + difuso (Lambert) + especular. Também modifique a main para já usar a versão que fiz, e sugira parâmetros iniciais para eu ajustar. Coloque comentários nos parâmetros, para facilitar o uso deles.
 
 Resultado: mudanças leves na implementação do Blinn-Phong em cada shader .vert (**calcDirLight**) e aplicação do modelo em **main_cpp**.
+
+---
+
+**PROMPT**: De que forma posso implementar uma neblina para esconder o fim do mapa, fazendo com que seja mais difícil de enxergar a borda dele?
+
+Resultado: Ajustes (corrigiu a antiga e gerou a linha atual) nas variáveis `fogFactor`, `litColor` e `finalColor` em *grass.frag*.

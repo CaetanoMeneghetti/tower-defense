@@ -12,6 +12,9 @@ uniform sampler2D aoMap;
 uniform sampler2D roughnessMap;
 uniform sampler2D displacementMap;
 uniform vec3 viewPos;
+uniform vec3 fogColor;
+uniform float fogStart;
+uniform float fogEnd;
 
 struct DirLight {
     vec3 direction;
@@ -96,5 +99,9 @@ void main() {
   float spec    = pow(max(dot(norm, halfDir), 0.0), shininess);
   vec3 specular = light.specular * spec;
 
-  fragColor = vec4(ambient + diffuse + specular, 1.0);
+    vec3 litColor = ambient + diffuse + specular;
+    float dist = length(viewPos - FragPos);
+    float fogFactor = clamp((fogEnd - dist) / (fogEnd - fogStart), 0.0, 1.0);
+    vec3 finalColor = mix(fogColor, litColor, fogFactor);
+    fragColor = vec4(finalColor, 1.0);
 }
