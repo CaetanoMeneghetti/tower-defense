@@ -5,8 +5,12 @@ out vec4 fragColor;
 in vec2 TexCoords;
 in vec3 Normal;
 in vec3 FragPos;
+in mat3 TBN;
+in float vHasTangent;
+
 
 uniform sampler2D tex;
+uniform sampler2D normalMap;
 uniform vec3 viewPos;
 
 // Luz direcional (sol/lua)
@@ -62,10 +66,44 @@ vec3 calcPointLights(vec3 norm, vec3 fragPos, vec3 viewDir, vec3 matColor) {
 void main() {
     vec4 texColor = texture(tex, TexCoords);
     if (texColor.a < 0.1) discard;
+    
+    vec3 norm;
+    if (vHasTangent > 0.5) {
+        vec3 mapNormal = texture(normalMap, TexCoords).rgb;
+        mapNormal = mapNormal * 2.0 - 1.0; 
+        
+        
 
-    vec3 norm    = normalize(Normal);
+        // --- Gram-Schmidt Per-Pixel ---
+        vec3 T = TBN[0];
+        vec3 B = TBN[1];
+        vec3 N = TBN[2];
+
+        
+        T = normalize(T - dot(T, N) * N);
+        
+        
+        vec3 idealB = cross(N, T);
+        
+        
+        float mirrored = (dot(B_ideal, B) < 0.0) ? -1.0 : 1.0;
+        B = idealB * mirroed;
+
+        
+        mat3 perfectTBN = mat3(T, B, N);
+
+         
+        // para diminuir a profundidade do normal map tlvz
+        mapNormal.xy *= 1;
+
+        norm = normalize(perfectTBN * mapNormal);
+    } else {
+        norm = normalize(Normal);
+    }
+    
     vec3 viewDir = normalize(viewPos - FragPos);
     vec3 lit = calcDirLight(norm, viewDir, texColor.rgb)
              + calcPointLights(norm, FragPos, viewDir, texColor.rgb);
+             
     fragColor = vec4(lit, texColor.a);
 }

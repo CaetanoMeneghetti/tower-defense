@@ -142,7 +142,8 @@ namespace {
     unsigned char *data = stbi_load(path, &w, &h, &channels, forcedChannels);
 
     if (!data) {
-      std::cout << "ERRO: Falha ao carregar a textura " << path << std::endl;
+      std::cout << "ERRO: Falha ao carregar " << path 
+                << " | Motivo: " << stbi_failure_reason() << std::endl;
       glDeleteTextures(1, &tex);
       glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
       return 0;
@@ -530,6 +531,7 @@ namespace {
       uiTextures.goldIcon      = loadTexture("data/textures/ui_gold.png", 4);
       uiTextures.healthIcon    = loadTexture("data/textures/ui_health.png", 4);
       uiTextures.archerIcon    = loadTexture("data/textures/ui_archer.png", 4);
+      
       gameHud.SetTextures(uiTextures);
 
     // ---------------------------------------------------------------------
@@ -863,6 +865,7 @@ namespace {
     unsigned int dirtDisplacementTex  = loadTexture("data/textures/dirt_displacement.png");
     unsigned int noiseTexture         = loadTexture("data/textures/perlin_noise.jpg", 3);
     unsigned int archerTexture        = loadTexture("data/textures/archer.png");
+    unsigned int archerNormalTex      = loadTexture("data/textures/archernormal.png");
     unsigned int bowTexture           = loadTexture("data/textures/bow.jpg");
     unsigned int treeLeavesTexture    = loadTexture("data/textures/leaves.png", 4);
     unsigned int treeLogTexture       = loadTexture("data/textures/log.jpeg");
@@ -898,7 +901,7 @@ namespace {
 
     defenders.push_back(GameObject(&archerBase, Vector<3>{ 0.0f, 0.1f, 0.0f }));
 
-    defenders.back().SetIdleAnimations({"aim"});
+    defenders.back().SetIdleAnimations({"idle1"});
 
     // ---------------------------------------------------------------------
     // LUZ DIRECIONAL — lua noturna (fria, azulada)
@@ -917,6 +920,12 @@ namespace {
     const double targetFPS = 60.0;
     const double frameDelay = 1.0 / targetFPS;
     double lastTime = glfwGetTime();
+    unsigned char flatNormal[3] = {128, 128, 255};
+    //normal fallback
+    unsigned int defaultNormal;
+    glGenTextures(1, &defaultNormal);
+    glBindTexture(GL_TEXTURE_2D, defaultNormal);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 1, 1, 0, GL_RGB, GL_UNSIGNED_BYTE, flatNormal);
     while (!glfwWindowShouldClose(window)) {
       double currentTime = glfwGetTime();
 
@@ -987,7 +996,14 @@ namespace {
       glUniform1i(glGetUniformLocation(shaderAnim, "tex"), 0);
       enemyRunner.position = characterPos;
       enemyRunner.rotationY = characterAngle;
+      glActiveTexture(GL_TEXTURE1);
+      glBindTexture(GL_TEXTURE_2D, defaultNormal);
+      glUniform1i(glGetUniformLocation(shaderAnim, "normalMap"), 1);
       enemyRunner.Draw(shaderAnim);
+
+      glActiveTexture(GL_TEXTURE1);
+      glBindTexture(GL_TEXTURE_2D, archerNormalTex);
+      glUniform1i(glGetUniformLocation(shaderAnim, "normalMap"), 1);
 
       glUseProgram(shaderAnim);
       applyDirectionalLight(shaderAnim, moonLight, glmViewPos);
