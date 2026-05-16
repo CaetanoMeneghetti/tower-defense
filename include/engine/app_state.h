@@ -3,8 +3,12 @@
 
 struct AppState {
     //info do jogador
-    int gold = 250;
+    int gold = 99999;
     int health = 20;
+
+    //sistema de tropas
+    bool isPlacingTroop = false;
+    int selectedTroopType = 0;
 
     //status da camera
     bool useFreeCamera = false;

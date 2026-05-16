@@ -115,7 +115,13 @@ void Hud::Render(const AppState& state, float fps) {
                 //    drawList->AddRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax(), IM_COL32(255, 255, 0, 200), 5.0f, 0, 3.0f);
                 // }
 
-                ImGui::ImageButton("btn_archer", (void*)(intptr_t)m_textures.archerIcon, ImVec2(50, 50));
+                if (ImGui::ImageButton("btn_archer", (void*)(intptr_t)m_textures.archerIcon, ImVec2(50, 50))) {
+                    
+                    if (state.gold >= 50) { 
+                        const_cast<AppState&>(state).isPlacingTroop = true;
+                        const_cast<AppState&>(state).selectedTroopType = 1; // 1 = Arqueiro
+                    }
+                }
             }
         }
 

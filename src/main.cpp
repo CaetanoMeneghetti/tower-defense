@@ -33,6 +33,10 @@
 #include "world/path_generator.h"
 #include "engine/animatedmodel.h"
 #include "engine/gameobject.h"
+
+#include <imgui.h>
+#include <imgui_impl_glfw.h>
+#include <imgui_impl_opengl3.h>
 #include <GLFW/glfw3.h>
 
 
@@ -508,6 +512,61 @@ namespace {
   // Tudo que aloca recurso GL vive aqui dentro. Quando run() retorna, todos
   // os recursos foram liberados e os destrutores de Mesh já rodaram, ainda
   // com o contexto GL válido. Só depois main() chama glfwDestroyWindow
+
+  //F.aux RAYCASTING
+  Vector<3> GetMouseGroundPos(GLFWwindow* window, const Camera& cam, const Vector<3>& camPos, int width, int height) {
+    double mouseX, mouseY;
+    glfwGetCursorPos(window, &mouseX, &mouseY);
+
+    // 1. Converte a posição do mouse para coordenadas normalizadas (NDC) [-1, 1]
+    float x = (2.0f * static_cast<float>(mouseX)) / static_cast<float>(width) - 1.0f;
+    float y = 1.0f - (2.0f * static_cast<float>(mouseY)) / static_cast<float>(height);
+
+    // 2. Extrair os eixos (Right, Up, Forward) diretamente da Matriz de Visão (View Matrix)
+    // Na sua implementação, a rotação da câmera fica transposta na matriz 3x3 do canto superior esquerdo.
+    Matrix<4, 4> V = cam.getViewMatrix();
+    Vector<3> right    { V(0,0), V(0,1), V(0,2) };
+    Vector<3> up       { V(1,0), V(1,1), V(1,2) };
+    Vector<3> backward { V(2,0), V(2,1), V(2,2) };
+
+    // 3. Pegar os parâmetros de Projeção que você usou na câmera
+    float aspect = static_cast<float>(width) / static_cast<float>(height);
+    // kFovDegrees vem do seu arquivo main.cpp (45.0f)
+    float tanHalfFov = std::tan((kFovDegrees * math_constants::kDegToRad) / 2.0f);
+
+    // 4. Calcular o vetor de direção do raio no espaço da câmera (Z = -1)
+    float vx = x * aspect * tanHalfFov;
+    float vy = y * tanHalfFov;
+    float vz = -1.0f;
+
+    // 5. Converter do View Space para o World Space multiplicando pelos vetores base
+    Vector<3> rayWorld;
+    rayWorld[0] = vx * right[0] + vy * up[0] + vz * backward[0];
+    rayWorld[1] = vx * right[1] + vy * up[1] + vz * backward[1];
+    rayWorld[2] = vx * right[2] + vy * up[2] + vz * backward[2];
+
+    // Normalizar o raio (deixar tamanho = 1)
+    float length = std::sqrt(rayWorld[0]*rayWorld[0] + rayWorld[1]*rayWorld[1] + rayWorld[2]*rayWorld[2]);
+    rayWorld[0] /= length;
+    rayWorld[1] /= length;
+    rayWorld[2] /= length;
+
+    // 6. Encontrar o ponto de interseção exato com o plano do chão (Y = 0)
+    // Equação da reta: P = Origem + Raio * t -> Queremos P.y = 0
+    if (rayWorld[1] >= 0.0f) {
+        return Vector<3>{0.0f, 0.0f, 0.0f}; 
+    }
+    
+    float t = -camPos[1] / rayWorld[1];
+    
+    Vector<3> result;
+    result[0] = camPos[0] + rayWorld[0] * t;
+    result[1] = 0.0f; 
+    result[2] = camPos[2] + rayWorld[2] * t;
+    
+    return result;
+}
+
   int run(GLFWwindow *window) {
     AppState state;
     glfwSetWindowUserPointer(window, &state);
@@ -547,6 +606,7 @@ namespace {
     unsigned int lineShader = createShaderProgram("data/shaders/line.vert", "data/shaders/line.frag");
     unsigned int skyShader = createShaderProgram("data/shaders/sky.vert", "data/shaders/sky.frag");
     unsigned int lanternShader = createShaderProgram("data/shaders/lantern.vert", "data/shaders/lantern.frag");
+    unsigned int previewShader = createShaderProgram("data/shaders/preview.vert", "data/shaders/preview.frag");
 
 
     if (!groundShader || !objShader || !pathShader || !lineShader || !lanternShader) {
@@ -556,6 +616,7 @@ namespace {
       glDeleteProgram(pathShader);
       glDeleteProgram(lineShader);
       glDeleteProgram(lanternShader);
+      glDeleteProgram(previewShader);
       return 1;
     }
 
@@ -651,6 +712,12 @@ namespace {
     if (!Parser("data/models/Archer/bow.obj", bowVertices)) {
       std::cout << "ERRO: Nao encontrou data/models/Archer/bow.obj" << std::endl;
     }
+
+    std::vector<Vertex> castleVertices;
+    Parser("data/models/world/castle.obj", castleVertices); 
+    Mesh castleMesh(castleVertices);
+    unsigned int castleTex = loadTexture("data/textures/castle.png");
+    unsigned int castleNormalTex = loadTexture("data/textures/castlenormal.png");
 
     std::vector<Vertex> treeLeavesVertices;
     std::unique_ptr<Mesh> treeLeavesMesh;
@@ -1045,6 +1112,33 @@ namespace {
           glUniform1i(glGetUniformLocation(objShader, "tex"), 0);
 
           bowMesh.Draw();
+          if (!curvePoints.empty()) {
+            // Pega o último ponto da curva gerada pelo Catmull-Rom
+            Point endPoint = curvePoints.back(); 
+            float offsetX = 4.0f; 
+            float offsetY = 0.0f;  
+            float offsetZ = 4.0;  
+            
+            Matrix<4, 4> castleTranslate = translate<4, 4>(endPoint.x + offsetX, 0.0f + offsetY, endPoint.y + offsetZ);
+            float anguloGiroGraus = -55.0f; 
+            Matrix<4, 4> castleRotY = rotateY<4, 4>(anguloGiroGraus * math_constants::kDegToRad);
+            Matrix<4, 4> castleScale     = scale<4, 4>(0.072, 0.072f, 0.072f); // Ajuste o tamanho se necessário
+            Matrix<4, 4> castleModel = castleTranslate * castleRotY * castleScale;
+            auto glCastleModel = toOpenGLMatrix(castleModel);
+
+            
+            glUniformMatrix4fv(objU.model, 1, GL_FALSE, glCastleModel.data());
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, castleTex);
+            glUniform1i(glGetUniformLocation(objShader, "tex"), 0);
+            
+            glActiveTexture(GL_TEXTURE1);
+            glBindTexture(GL_TEXTURE_2D, castleNormalTex);
+            glUniform1i(glGetUniformLocation(objShader, "normalMap"), 1);
+
+            castleMesh.Draw();
+
+        }
       }
 
       // -------------------------------------------------------------------
@@ -1233,7 +1327,80 @@ namespace {
         glBindVertexArray(curve.vao);
         glDrawArrays(GL_LINE_STRIP, 0, curve.vertexCount);
       }
+        if (state.isPlacingTroop) {
+          static bool waitingForRelease = true;
+          if (waitingForRelease) {
+              if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_RELEASE) {
+                  waitingForRelease = false;
+              }
+          }
 
+          // 1. Pega a coordenada 3D do chão baseada no mouse
+          Vector<3> groundPos = GetMouseGroundPos(window, cam, cameraPosition, state.fbWidth, state.fbHeight);
+
+          // 2. Calcula a distância exata do mouse até a linha central do caminho
+          float distToPath = distanceToPath(curvePoints, groundPos[0], groundPos[2]);
+
+          // 3. Validação 1: Está EM CIMA da estrada de terra? 
+          // kPathHalfWidth é 2.0f. Adicionamos uma pequena folga de 0.5f para limpar o visual do caminho.
+          bool isOnPath = (distToPath < (kPathHalfWidth + 0.5f)); 
+
+          // 4. Validação 2: Está MUITO LONGE do caminho?
+          // 12.0f cria uma faixa perfeita para colocar defensores ao longo da estrada.
+          float maxAllowedDist = 12.0f; 
+          bool isTooFar = (distToPath > maxAllowedDist);
+
+          // Regra solicitada: Inválido APENAS se estiver no path OU muito longe dele
+          bool isInvalidPlacement = isOnPath || isTooFar;
+
+          // 5. Define a cor do holograma (Vermelho para inválido, Azul para válido)
+          glm::vec4 hColor;
+          if (isInvalidPlacement) {
+              hColor = glm::vec4(1.0f, 0.2f, 0.2f, 0.5f); // Vermelho translúcido
+          } else {
+              hColor = glm::vec4(0.2f, 0.7f, 1.0f, 0.5f); // Azul ciano translúcido
+          }
+
+          // 6. Configura o OpenGL para renderizar transparência
+          glEnable(GL_BLEND);
+          glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+          // 7. Ativa o shader do holograma e envia os dados
+          glUseProgram(previewShader);
+          glUniformMatrix4fv(glGetUniformLocation(previewShader, "view"), 1, GL_FALSE, glView.data());
+          glUniformMatrix4fv(glGetUniformLocation(previewShader, "projection"), 1, GL_FALSE, glProj.data());
+          glUniform4fv(glGetUniformLocation(previewShader, "previewColor"), 1, glm::value_ptr(hColor));
+
+          // 8. Desenha o "Fantasma" na posição do mouse
+          GameObject previewGhost(&archerBase, groundPos);
+          previewGhost.SetAnimation("idle1");
+          previewGhost.Update(deltaTime);
+          previewGhost.Draw(previewShader);
+
+          glDisable(GL_BLEND);
+
+          // 9. Confirmação do clique esquerdo (Só permite se a área for válida!)
+          ImGuiIO& io = ImGui::GetIO();
+          if (!waitingForRelease && !isInvalidPlacement && 
+              glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS && !io.WantCaptureMouse) {
+              
+              state.gold -= 50; 
+
+              // Instancia o Arqueiro definitivo no mapa
+              GameObject newArcher(&archerBase, groundPos);
+              newArcher.SetIdleAnimations({"idle1"});
+              defenders.push_back(newArcher);
+
+              state.isPlacingTroop = false;
+              waitingForRelease = true;
+          }
+
+          // 10. Cancelar posicionamento com botão direito
+          if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
+              state.isPlacingTroop = false;
+              waitingForRelease = true;
+          }
+      }
       float currentFps = 1.0f / deltaTime;
       gameHud.Render(state, currentFps);
 
@@ -1269,6 +1436,8 @@ namespace {
     glDeleteTextures(1, &lanternMetallicTex);
     glDeleteTextures(1, &lanternAOTex);
     glDeleteTextures(1, &lanternOpacityTex);
+    glDeleteTextures(1, &castleTex);
+    glDeleteTextures(1, &castleNormalTex);
 
     glDeleteVertexArrays(1, &grass.vao);
     glDeleteBuffers(1, &grass.vbo);
