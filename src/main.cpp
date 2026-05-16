@@ -142,8 +142,7 @@ namespace {
     unsigned char *data = stbi_load(path, &w, &h, &channels, forcedChannels);
 
     if (!data) {
-      std::cout << "ERRO: Falha ao carregar " << path 
-                << " | Motivo: " << stbi_failure_reason() << std::endl;
+      std::cout << "ERRO: Falha ao carregar a textura " << path << std::endl;
       glDeleteTextures(1, &tex);
       glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
       return 0;

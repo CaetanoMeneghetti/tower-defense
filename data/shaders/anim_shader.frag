@@ -75,6 +75,7 @@ void main() {
         
 
         // --- Gram-Schmidt Per-Pixel ---
+        
         vec3 T = TBN[0];
         vec3 B = TBN[1];
         vec3 N = TBN[2];
@@ -83,11 +84,11 @@ void main() {
         T = normalize(T - dot(T, N) * N);
         
         
-        vec3 idealB = cross(N, T);
+        vec3 B_ideal = cross(N, T);
         
         
-        float mirrored = (dot(B_ideal, B) < 0.0) ? -1.0 : 1.0;
-        B = idealB * mirroed;
+        float espelhado = (dot(B_ideal, B) < 0.0) ? -1.0 : 1.0;
+        B = B_ideal * espelhado;
 
         
         mat3 perfectTBN = mat3(T, B, N);
