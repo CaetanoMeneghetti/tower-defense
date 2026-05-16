@@ -10,6 +10,9 @@
 #include <iostream>
 #include <vector>
 #include <ctime>
+#include <limits>
+#include <memory>
+#include <random>
 
 #include "engine/app_state.h"
 #include "engine/hud.h"
@@ -96,6 +99,12 @@ namespace {
     unsigned int vao = 0;
     unsigned int vbo = 0;
     GLsizei vertexCount = 0;
+  };
+
+  struct TreeInstance {
+    Vector<3> position;
+    float rotationY = 0.0f;
+    float scale = 1.0f;
   };
 
   AppState &stateFromWindow(GLFWwindow *window) {
@@ -226,6 +235,49 @@ namespace {
 
     m.vertexCount = static_cast<GLsizei>(curvePoints.size());
     return m;
+  }
+
+  float distancePointSegment2D(const Point& p, const Point& a, const Point& b) {
+    const float vx = b.x - a.x;
+    const float vy = b.y - a.y;
+    const float wx = p.x - a.x;
+    const float wy = p.y - a.y;
+
+    const float c1 = vx * wx + vy * wy;
+    if (c1 <= 0.0f) {
+      return std::sqrt(wx * wx + wy * wy);
+    }
+
+    const float c2 = vx * vx + vy * vy;
+    if (c2 <= c1) {
+      const float dx = p.x - b.x;
+      const float dy = p.y - b.y;
+      return std::sqrt(dx * dx + dy * dy);
+    }
+
+    const float t = c1 / c2;
+    const float projx = a.x + t * vx;
+    const float projy = a.y + t * vy;
+    const float dx = p.x - projx;
+    const float dy = p.y - projy;
+    return std::sqrt(dx * dx + dy * dy);
+  }
+
+  float distanceToPath(const std::vector<Point>& curvePoints, float x, float z) {
+    if (curvePoints.size() < 2) {
+      return std::numeric_limits<float>::max();
+    }
+
+    const Point p{x, z};
+    float minDist = std::numeric_limits<float>::max();
+    for (size_t i = 0; i + 1 < curvePoints.size(); ++i) {
+      const float d = distancePointSegment2D(p, curvePoints[i], curvePoints[i + 1]);
+      if (d < minDist) {
+        minDist = d;
+      }
+    }
+
+    return minDist;
   }
 
   // =========================================================================
@@ -547,6 +599,11 @@ namespace {
     glUniform1f(pathU.fogStart, fogStart);
     glUniform1f(pathU.fogEnd, fogEnd);
 
+    glUseProgram(objShader);
+    glUniform3fv(glGetUniformLocation(objShader, "fogColor"), 1, glm::value_ptr(fogColor));
+    glUniform1f(glGetUniformLocation(objShader, "fogStart"), fogStart);
+    glUniform1f(glGetUniformLocation(objShader, "fogEnd"), fogEnd);
+
     // ---------------------------------------------------------------------
     // CARREGA OBJ/GLB ANTES DE ALOCAR MAIS RECURSOS GL
     // ---------------------------------------------------------------------
@@ -561,6 +618,44 @@ namespace {
     if (!Parser("data/models/Archer/bow.obj", bowVertices)) {
       std::cout << "ERRO: Nao encontrou data/models/Archer/bow.obj" << std::endl;
     }
+
+    std::vector<Vertex> treeLeavesVertices;
+    std::unique_ptr<Mesh> treeLeavesMesh;
+    if (!Parser("data/models/world/leaves.obj", treeLeavesVertices)) {
+      std::cout << "ERRO: Nao encontrou data/models/world/leaves.obj" << std::endl;
+    } else if (!treeLeavesVertices.empty()) {
+      treeLeavesMesh.reset(new Mesh(treeLeavesVertices));
+    } else {
+      std::cout << "[trees] leaves.obj sem vertices (formato nao suportado?)" << std::endl;
+    }
+
+    std::vector<Vertex> treeLogVertices;
+    std::unique_ptr<Mesh> treeLogMesh;
+    if (!Parser("data/models/world/log.obj", treeLogVertices)) {
+      std::cout << "ERRO: Nao encontrou data/models/world/log.obj" << std::endl;
+    } else if (!treeLogVertices.empty()) {
+      treeLogMesh.reset(new Mesh(treeLogVertices));
+    } else {
+      std::cout << "[trees] log.obj sem vertices (formato nao suportado?)" << std::endl;
+    }
+
+    bool usingFallbackTree = false;
+    if (!treeLeavesMesh && !treeLogMesh) {
+      if (Parser("data/models/world/tree.obj", treeLogVertices)) {
+        if (!treeLogVertices.empty()) {
+          treeLogMesh.reset(new Mesh(treeLogVertices));
+          usingFallbackTree = true;
+          std::cout << "[trees] Fallback: carregou data/models/world/tree.obj" << std::endl;
+        } else {
+          std::cout << "[trees] Fallback sem vertices (formato nao suportado?)" << std::endl;
+        }
+      } else {
+        std::cout << "[trees] Fallback falhou: data/models/world/tree.obj" << std::endl;
+      }
+    }
+
+    std::cout << "[trees] leaves vertices: " << treeLeavesVertices.size()
+              << " | log vertices: " << treeLogVertices.size() << std::endl;
 
     // ---------------------------------------------------------------------
     // GEOMETRIA
@@ -580,9 +675,78 @@ namespace {
     GpuMesh curve = createCurveMesh(curvePoints);
     PathCache curveCache = buildPathCache(curvePoints);
 
+    const float kMapHalfSize = 200.0f;
+    const float kTreeBorderMargin = 12.0f;
+    const float kTreeMinSpacing = 6.0f;
+    const float kTreePathBuffer = 6.0f;
+    const float kTreeBaseScale = 1.0f;
+    const int kTreeCount = 1000;
+    const int kMaxTreeAttempts = kTreeCount * 40;
+    const float kPathHalfWidth = 2.0f;
+
+    std::vector<TreeInstance> trees;
+    trees.reserve(kTreeCount);
+
+    std::mt19937 rng(static_cast<unsigned int>(time(NULL)));
+    std::uniform_real_distribution<float> posDist(
+        -kMapHalfSize + kTreeBorderMargin,
+        kMapHalfSize - kTreeBorderMargin);
+    std::uniform_real_distribution<float> rotDist(0.0f, math_constants::kTwoPi);
+    std::uniform_real_distribution<float> scaleDist(0.8f, 1.4f);
+
+    const float minSpacingSq = kTreeMinSpacing * kTreeMinSpacing;
+    const float pathAvoidDist = kPathHalfWidth + kTreePathBuffer;
+    int attempts = 0;
+    while (static_cast<int>(trees.size()) < kTreeCount && attempts < kMaxTreeAttempts) {
+      ++attempts;
+
+      const float x = posDist(rng);
+      const float z = posDist(rng);
+
+      if (distanceToPath(curvePoints, x, z) < pathAvoidDist) {
+        continue;
+      }
+
+      bool tooClose = false;
+      for (const auto& t : trees) {
+        const float dx = x - t.position[0];
+        const float dz = z - t.position[2];
+        if ((dx * dx + dz * dz) < minSpacingSq) {
+          tooClose = true;
+          break;
+        }
+      }
+      if (tooClose) {
+        continue;
+      }
+
+      TreeInstance tree;
+      tree.position = Vector<3>{x, 0.0f, z};
+      tree.rotationY = rotDist(rng);
+      tree.scale = kTreeBaseScale * scaleDist(rng);
+      trees.push_back(tree);
+    }
+
+    std::cout << "[trees] geradas " << trees.size() << "/" << kTreeCount
+              << " | tentativas " << attempts
+              << " | minSpacing " << kTreeMinSpacing
+              << " | pathBuffer " << kTreePathBuffer
+              << " | fallback " << (usingFallbackTree ? "sim" : "nao")
+              << std::endl;
+    if (!trees.empty()) {
+      std::cout << "[trees] exemplo pos: (" << trees.front().position[0]
+                << ", " << trees.front().position[2]
+                << ") escala " << trees.front().scale << std::endl;
+    }
+
     Mesh pathMesh = generatePathMesh(curvePoints, 2.0f);
 
     Mesh bowMesh(bowVertices);
+    const bool hasTreeLeavesMesh = (treeLeavesMesh != nullptr);
+    const bool hasTreeLogMesh = (treeLogMesh != nullptr);
+    if (!hasTreeLeavesMesh && !hasTreeLogMesh) {
+      std::cout << "[trees] nenhum mesh de arvore carregado; nao vai desenhar." << std::endl;
+    }
 
     // ---------------------------------------------------------------------
     // TEXTURAS
@@ -600,7 +764,12 @@ namespace {
     unsigned int noiseTexture         = loadTexture("data/textures/perlin_noise.jpg", 3);
     unsigned int archerTexture        = loadTexture("data/textures/archer.png");
     unsigned int bowTexture           = loadTexture("data/textures/bow.jpg");
+    unsigned int treeLeavesTexture    = loadTexture("data/textures/leaves.png", 4);
+    unsigned int treeLogTexture       = loadTexture("data/textures/log.jpeg");
     unsigned int skyTexture           = loadTexture("data/textures/night_sky_tonemapped.jpg");
+
+    std::cout << "[trees] leaves texture id: " << treeLeavesTexture
+          << " | log texture id: " << treeLogTexture << std::endl;
 
     GpuMesh skyMesh = createSkyboxMesh();
     GLint skyViewLoc = glGetUniformLocation(skyShader, "view");
@@ -787,6 +956,55 @@ namespace {
       glBindVertexArray(grass.vao);
       glDrawArrays(GL_TRIANGLES, 0, grass.vertexCount);
 
+      // -------------------------------------------------------------------
+      // ARVORES
+      // -------------------------------------------------------------------
+      if ((hasTreeLeavesMesh || hasTreeLogMesh) && !trees.empty()) {
+        glUseProgram(objShader);
+        applyDirectionalLight(objShader, moonLight, glmViewPos);
+        glUniformMatrix4fv(objU.view, 1, GL_FALSE, glView.data());
+        glUniformMatrix4fv(objU.projection, 1, GL_FALSE, glProj.data());
+
+        if (hasTreeLogMesh && treeLogTexture != 0) {
+          glActiveTexture(GL_TEXTURE0);
+          glBindTexture(GL_TEXTURE_2D, treeLogTexture);
+          glUniform1i(glGetUniformLocation(objShader, "tex"), 0);
+
+          for (const auto& tree : trees) {
+            Matrix<4, 4> treeTranslate = translate<4, 4>(
+                tree.position[0], tree.position[1], tree.position[2]);
+            Matrix<4, 4> treeRotateY = rotateY<4, 4>(tree.rotationY);
+            Matrix<4, 4> treeScale = scale<4, 4>(tree.scale, tree.scale, tree.scale);
+            Matrix<4, 4> treeModel = treeTranslate * treeRotateY * treeScale;
+            auto glTreeModel = toOpenGLMatrix(treeModel);
+            glUniformMatrix4fv(objU.model, 1, GL_FALSE, glTreeModel.data());
+            treeLogMesh->Draw();
+          }
+        }
+
+        if (hasTreeLeavesMesh && treeLeavesTexture != 0) {
+          glEnable(GL_BLEND);
+          glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+          glActiveTexture(GL_TEXTURE0);
+          glBindTexture(GL_TEXTURE_2D, treeLeavesTexture);
+          glUniform1i(glGetUniformLocation(objShader, "tex"), 0);
+
+          for (const auto& tree : trees) {
+            Matrix<4, 4> treeTranslate = translate<4, 4>(
+                tree.position[0], tree.position[1], tree.position[2]);
+            Matrix<4, 4> treeRotateY = rotateY<4, 4>(tree.rotationY);
+            Matrix<4, 4> treeScale = scale<4, 4>(tree.scale, tree.scale, tree.scale);
+            Matrix<4, 4> treeModel = treeTranslate * treeRotateY * treeScale;
+            auto glTreeModel = toOpenGLMatrix(treeModel);
+            glUniformMatrix4fv(objU.model, 1, GL_FALSE, glTreeModel.data());
+            treeLeavesMesh->Draw();
+          }
+
+          glDisable(GL_BLEND);
+        }
+      }
+
       glBindTexture(GL_TEXTURE_2D, skyTexture);
       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
@@ -860,9 +1078,9 @@ namespace {
       float currentFps = 1.0f / deltaTime;
       gameHud.Render(state, currentFps);
 
-      if (hasReachedEnd) {
-        break;
-      }
+      // if (hasReachedEnd) {
+      //   break;
+      // }
 
       glfwSwapBuffers(window);
       glfwPollEvents();
@@ -884,6 +1102,8 @@ namespace {
     glDeleteTextures(1, &dirtDisplacementTex);
     glDeleteTextures(1, &noiseTexture);
     glDeleteTextures(1, &archerTexture);
+    glDeleteTextures(1, &treeLeavesTexture);
+    glDeleteTextures(1, &treeLogTexture);
 
     glDeleteVertexArrays(1, &grass.vao);
     glDeleteBuffers(1, &grass.vbo);

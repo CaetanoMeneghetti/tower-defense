@@ -18,6 +18,11 @@ struct DirLight {
 };
 uniform DirLight light;
 
+// Fog uniforms
+uniform float fogStart;
+uniform float fogEnd;
+uniform vec3 fogColor;
+
 const float SHININESS = 32.0;
 
 vec3 calcDirLight(vec3 norm, vec3 viewDir, vec3 matColor) {
@@ -35,5 +40,16 @@ void main() {
     vec4 texColor = texture(tex, texCoord);
     vec3 norm     = normalize(Normal);
     vec3 viewDir  = normalize(viewPos - FragPos);
-    fragColor = vec4(calcDirLight(norm, viewDir, texColor.rgb), texColor.a);
+
+    vec3 resultColor = calcDirLight(norm, viewDir, texColor.rgb);
+
+    // Alpha test para as folhas
+    if (texColor.a < 0.1) discard;
+
+    // Cálculo do fog
+    float dist = length(viewPos - FragPos);
+    float fogFactor = clamp((dist - fogStart) / (fogEnd - fogStart), 0.0, 1.0);
+    vec3 finalColor = mix(resultColor, fogColor, fogFactor);
+
+    fragColor = vec4(finalColor, texColor.a);
 }
