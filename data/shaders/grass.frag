@@ -24,6 +24,34 @@ struct DirLight {
 };
 uniform DirLight light;
 
+// Point lights (lanternas)
+struct PointLight {
+    vec3 position;
+    vec3 color;
+};
+const int MAX_POINT_LIGHTS = 20;
+uniform int numPointLights;
+uniform PointLight pointLights[MAX_POINT_LIGHTS];
+
+const float PL_KC = 1.0;
+const float PL_KL = 0.22;
+const float PL_KQ = 0.20;
+
+vec3 calcPointLights(vec3 norm, vec3 fragPos, vec3 viewDir, vec3 matColor, float shininess) {
+    vec3 result = vec3(0.0);
+    for (int i = 0; i < numPointLights; ++i) {
+        vec3 toLight = pointLights[i].position - fragPos;
+        float dist = length(toLight);
+        vec3 lDir  = toLight / max(dist, 0.0001);
+        float att  = 1.0 / (PL_KC + PL_KL * dist + PL_KQ * dist * dist);
+        float diff = max(dot(norm, lDir), 0.0);
+        vec3 halfDir = normalize(lDir + viewDir);
+        float spec = pow(max(dot(norm, halfDir), 0.0), shininess);
+        result += (diff * matColor + spec * vec3(0.2)) * pointLights[i].color * att;
+    }
+    return result;
+}
+
 // --- blending de múltiplas camadas de grama ---
 const mat2 ROT1 = mat2(0.39, -0.92, 0.92, 0.39);
 const mat2 ROT2 = mat2(-0.65, -0.75, 0.75, -0.65);
@@ -99,7 +127,8 @@ void main() {
   float spec    = pow(max(dot(norm, halfDir), 0.0), shininess);
   vec3 specular = light.specular * spec;
 
-    vec3 litColor = ambient + diffuse + specular;
+    vec3 litColor = ambient + diffuse + specular
+                  + calcPointLights(norm, FragPos, viewDir, baseColor, shininess);
     float dist = length(viewPos - FragPos);
     float fogFactor = clamp((fogEnd - dist) / (fogEnd - fogStart), 0.0, 1.0);
     vec3 finalColor = mix(fogColor, litColor, fogFactor);

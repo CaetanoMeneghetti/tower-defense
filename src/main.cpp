@@ -107,6 +107,20 @@ namespace {
     float scale = 1.0f;
   };
 
+  struct LanternInstance {
+    Vector<3> position;
+    float rotationY = 0.0f;
+  };
+
+  struct LanternUniforms {
+    GLint view;
+    GLint projection;
+    GLint model;
+
+    LanternUniforms(GLint v, GLint p, GLint m)
+      : view(v), projection(p), model(m) {}
+  };
+
   AppState &stateFromWindow(GLFWwindow *window) {
     return *static_cast<AppState *>(glfwGetWindowUserPointer(window));
   }
@@ -531,14 +545,16 @@ namespace {
     unsigned int pathShader = createShaderProgram("data/shaders/path.vert", "data/shaders/path.frag");
     unsigned int lineShader = createShaderProgram("data/shaders/line.vert", "data/shaders/line.frag");
     unsigned int skyShader = createShaderProgram("data/shaders/sky.vert", "data/shaders/sky.frag");
+    unsigned int lanternShader = createShaderProgram("data/shaders/lantern.vert", "data/shaders/lantern.frag");
 
 
-    if (!groundShader || !objShader || !pathShader || !lineShader) {
+    if (!groundShader || !objShader || !pathShader || !lineShader || !lanternShader) {
       std::cout << "ERRO: Falha ao criar um ou mais shaders" << std::endl;
       glDeleteProgram(groundShader);
       glDeleteProgram(objShader);
       glDeleteProgram(pathShader);
       glDeleteProgram(lineShader);
+      glDeleteProgram(lanternShader);
       return 1;
     }
 
@@ -570,6 +586,11 @@ namespace {
     LineUniforms lineU{
         glGetUniformLocation(lineShader, "view"),
         glGetUniformLocation(lineShader, "projection"),
+    };
+    LanternUniforms lanternU{
+        glGetUniformLocation(lanternShader, "view"),
+        glGetUniformLocation(lanternShader, "projection"),
+        glGetUniformLocation(lanternShader, "model"),
     };
 
     const glm::vec3 fogColor(0.02f, 0.03f, 0.07f);
@@ -603,6 +624,17 @@ namespace {
     glUniform3fv(glGetUniformLocation(objShader, "fogColor"), 1, glm::value_ptr(fogColor));
     glUniform1f(glGetUniformLocation(objShader, "fogStart"), fogStart);
     glUniform1f(glGetUniformLocation(objShader, "fogEnd"), fogEnd);
+
+    glUseProgram(lanternShader);
+    glUniform1i(glGetUniformLocation(lanternShader, "colorMap"),     0);
+    glUniform1i(glGetUniformLocation(lanternShader, "normalMap"),    1);
+    glUniform1i(glGetUniformLocation(lanternShader, "roughnessMap"), 2);
+    glUniform1i(glGetUniformLocation(lanternShader, "metallicMap"),  3);
+    glUniform1i(glGetUniformLocation(lanternShader, "aoMap"),        4);
+    glUniform1i(glGetUniformLocation(lanternShader, "opacityMap"),   5);
+    glUniform3fv(glGetUniformLocation(lanternShader, "fogColor"), 1, glm::value_ptr(fogColor));
+    glUniform1f(glGetUniformLocation(lanternShader, "fogStart"), fogStart);
+    glUniform1f(glGetUniformLocation(lanternShader, "fogEnd"), fogEnd);
 
     // ---------------------------------------------------------------------
     // CARREGA OBJ/GLB ANTES DE ALOCAR MAIS RECURSOS GL
@@ -653,9 +685,6 @@ namespace {
         std::cout << "[trees] Fallback falhou: data/models/world/tree.obj" << std::endl;
       }
     }
-
-    std::cout << "[trees] leaves vertices: " << treeLeavesVertices.size()
-              << " | log vertices: " << treeLogVertices.size() << std::endl;
 
     // ---------------------------------------------------------------------
     // GEOMETRIA
@@ -727,19 +756,90 @@ namespace {
       trees.push_back(tree);
     }
 
-    std::cout << "[trees] geradas " << trees.size() << "/" << kTreeCount
-              << " | tentativas " << attempts
-              << " | minSpacing " << kTreeMinSpacing
-              << " | pathBuffer " << kTreePathBuffer
-              << " | fallback " << (usingFallbackTree ? "sim" : "nao")
-              << std::endl;
-    if (!trees.empty()) {
-      std::cout << "[trees] exemplo pos: (" << trees.front().position[0]
-                << ", " << trees.front().position[2]
-                << ") escala " << trees.front().scale << std::endl;
+    Mesh pathMesh = generatePathMesh(curvePoints, 2.0f);
+
+    // ---------------------------------------------------------------------
+    // LANTERNAS — 20 unidades alternadas (zigue-zague) ao longo do path
+    // ---------------------------------------------------------------------
+    std::vector<Vertex> lanternVertices;
+    std::unique_ptr<Mesh> lanternMesh;
+    if (!Parser("data/models/world/lantern.obj", lanternVertices)) {
+      std::cout << "ERRO: Nao encontrou data/models/world/lantern.obj" << std::endl;
+    } else if (!lanternVertices.empty()) {
+      lanternMesh.reset(new Mesh(lanternVertices));
+    } else {
+      std::cout << "[lanterns] lantern.obj sem vertices (formato nao suportado?)" << std::endl;
     }
 
-    Mesh pathMesh = generatePathMesh(curvePoints, 2.0f);
+    const int kLanternCount = 8;
+    const float kLanternScale = 0.01f;
+    // Distância do centro do path; path tem meia-largura 2.0, então fica na grama.
+    const float kLanternPathOffset = 2.8f;
+    // Altura aproximada do bulbo/chama, em world units (já escalado).
+    // BBox do OBJ: Y ∈ [-5, 85]cm; bulbo no meio ~ y=45cm → 0.9 world units.
+    const float kLanternLightHeight = 0.9f;
+    // Laranja quente; valores > 1 para a luz "estourar" sobre o ambient noturno.
+    const glm::vec3 kLanternLightColor = glm::vec3(1.8f, 1.05f, 0.40f);
+
+    std::vector<LanternInstance> lanterns;
+    lanterns.reserve(kLanternCount);
+    std::vector<PointLight> lanternLights;
+    lanternLights.reserve(kLanternCount);
+
+    if (curveCache.totalDistance > 0.0f) {
+      // Duas sequências interleaved: 10 lanternas em cada lado, com espaçamento
+      // próprio uniforme. Lado direito sai 0.5 spacing à frente do esquerdo para
+      // o efeito zigue-zague. Evita aglomeração em curvas.
+      const int perSide = kLanternCount / 2;
+      const float spacing = curveCache.totalDistance / static_cast<float>(perSide);
+      for (int i = 0; i < kLanternCount; ++i) {
+        const int sideIdx = i / 2;
+        const bool isLeft = (i % 2 == 0);
+        const float phase = isLeft ? 0.25f : 0.75f;
+        const float arcLen = (static_cast<float>(sideIdx) + phase) * spacing;
+
+        float pathAngle = 0.0f;
+        bool dummyReachedEnd = false;
+        Vector<3> pathPos = getPositionAtDistance(
+            curvePoints, curveCache, arcLen, pathAngle, dummyReachedEnd);
+
+        // getPositionAtDistance retorna outAngle = atan2(-dx, dy). Recupera a
+        // direção 2D normalizada do path neste ponto.
+        const float ndx = -std::sin(pathAngle);
+        const float ndy =  std::cos(pathAngle);
+
+        // Perpendicular esquerda em XZ (rot 90° anti-horário em torno de Y).
+        const float perpX = -ndy;
+        const float perpZ =  ndx;
+        const float side = isLeft ? 1.0f : -1.0f;
+
+        LanternInstance lantern;
+        lantern.position = Vector<3>{
+            pathPos[0] + perpX * kLanternPathOffset * side,
+            0.0f,
+            pathPos[2] + perpZ * kLanternPathOffset * side};
+
+        // Lanterna olha para o centro do path: vetor da lanterna até o path.
+        const float towardPathX = -perpX * side;
+        const float towardPathZ = -perpZ * side;
+        lantern.rotationY = std::atan2(towardPathX, towardPathZ);
+
+        lanterns.push_back(lantern);
+
+        PointLight pl;
+        pl.position = glm::vec3(
+            lantern.position[0], kLanternLightHeight, lantern.position[2]);
+        pl.color = kLanternLightColor;
+        lanternLights.push_back(pl);
+      }
+    }
+
+    unsigned int lanternColorTex      = loadTexture("data/textures/lantern_color.jpg");
+    unsigned int lanternNormalTex     = loadTexture("data/textures/lantern_normal.jpg");
+    unsigned int lanternRoughnessTex  = loadTexture("data/textures/lantern_roughness.jpg");
+    unsigned int lanternMetallicTex   = loadTexture("data/textures/lantern_metallic.jpg");
+    unsigned int lanternAOTex         = loadTexture("data/textures/lantern_mixed_ambient_occlusion.jpg");
+    unsigned int lanternOpacityTex    = loadTexture("data/textures/lantern_opacity.jpg");
 
     Mesh bowMesh(bowVertices);
     const bool hasTreeLeavesMesh = (treeLeavesMesh != nullptr);
@@ -767,9 +867,6 @@ namespace {
     unsigned int treeLeavesTexture    = loadTexture("data/textures/leaves.png", 4);
     unsigned int treeLogTexture       = loadTexture("data/textures/log.jpeg");
     unsigned int skyTexture           = loadTexture("data/textures/night_sky_tonemapped.jpg");
-
-    std::cout << "[trees] leaves texture id: " << treeLeavesTexture
-          << " | log texture id: " << treeLogTexture << std::endl;
 
     GpuMesh skyMesh = createSkyboxMesh();
     GLint skyViewLoc = glGetUniformLocation(skyShader, "view");
@@ -880,6 +977,7 @@ namespace {
       // Mudança obj estático pra glb com animação
       glUseProgram(shaderAnim);
       applyDirectionalLight(shaderAnim, moonLight, glmViewPos);
+      applyPointLights(shaderAnim, lanternLights);
       glUniformMatrix4fv(glGetUniformLocation(shaderAnim, "view"), 1, GL_FALSE, glView.data());
       glUniformMatrix4fv(glGetUniformLocation(shaderAnim, "projection"), 1, GL_FALSE, glProj.data());
 
@@ -893,6 +991,7 @@ namespace {
 
       glUseProgram(shaderAnim);
       applyDirectionalLight(shaderAnim, moonLight, glmViewPos);
+      applyPointLights(shaderAnim, lanternLights);
       glUniformMatrix4fv(glGetUniformLocation(shaderAnim, "view"), 1, GL_FALSE, glView.data());
       glUniformMatrix4fv(glGetUniformLocation(shaderAnim, "projection"), 1, GL_FALSE, glProj.data());
 
@@ -906,6 +1005,7 @@ namespace {
 
       glUseProgram(objShader);
       applyDirectionalLight(objShader, moonLight, glmViewPos);
+      applyPointLights(objShader, lanternLights);
       glUniformMatrix4fv(objU.view, 1, GL_FALSE, glView.data());
       glUniformMatrix4fv(objU.projection, 1, GL_FALSE, glProj.data());
 
@@ -937,6 +1037,7 @@ namespace {
       // -------------------------------------------------------------------
       glUseProgram(groundShader);
       applyDirectionalLight(groundShader, moonLight, glmViewPos);
+      applyPointLights(groundShader, lanternLights);
       glUniformMatrix4fv(groundU.view, 1, GL_FALSE, glView.data());
       glUniformMatrix4fv(groundU.projection, 1, GL_FALSE, glProj.data());
 
@@ -962,6 +1063,7 @@ namespace {
       if ((hasTreeLeavesMesh || hasTreeLogMesh) && !trees.empty()) {
         glUseProgram(objShader);
         applyDirectionalLight(objShader, moonLight, glmViewPos);
+        applyPointLights(objShader, lanternLights);
         glUniformMatrix4fv(objU.view, 1, GL_FALSE, glView.data());
         glUniformMatrix4fv(objU.projection, 1, GL_FALSE, glProj.data());
 
@@ -1005,6 +1107,47 @@ namespace {
         }
       }
 
+      // -------------------------------------------------------------------
+      // LANTERNAS
+      // -------------------------------------------------------------------
+      if (lanternMesh && !lanterns.empty()) {
+        glUseProgram(lanternShader);
+        applyDirectionalLight(lanternShader, moonLight, glmViewPos);
+        applyPointLights(lanternShader, lanternLights);
+        glUniformMatrix4fv(lanternU.view, 1, GL_FALSE, glView.data());
+        glUniformMatrix4fv(lanternU.projection, 1, GL_FALSE, glProj.data());
+
+        glEnable(GL_CULL_FACE);
+        glCullFace(GL_BACK);
+
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, lanternColorTex);
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, lanternNormalTex);
+        glActiveTexture(GL_TEXTURE2);
+        glBindTexture(GL_TEXTURE_2D, lanternRoughnessTex);
+        glActiveTexture(GL_TEXTURE3);
+        glBindTexture(GL_TEXTURE_2D, lanternMetallicTex);
+        glActiveTexture(GL_TEXTURE4);
+        glBindTexture(GL_TEXTURE_2D, lanternAOTex);
+        glActiveTexture(GL_TEXTURE5);
+        glBindTexture(GL_TEXTURE_2D, lanternOpacityTex);
+
+        for (const auto& lantern : lanterns) {
+          Matrix<4, 4> lanternTranslate = translate<4, 4>(
+              lantern.position[0], lantern.position[1], lantern.position[2]);
+          Matrix<4, 4> lanternRotateY = rotateY<4, 4>(lantern.rotationY);
+          Matrix<4, 4> lanternScale = scale<4, 4>(
+              kLanternScale, kLanternScale, kLanternScale);
+          Matrix<4, 4> lanternModel = lanternTranslate * lanternRotateY * lanternScale;
+          auto glLanternModel = toOpenGLMatrix(lanternModel);
+          glUniformMatrix4fv(lanternU.model, 1, GL_FALSE, glLanternModel.data());
+          lanternMesh->Draw();
+        }
+
+        glDisable(GL_CULL_FACE);
+      }
+
       glBindTexture(GL_TEXTURE_2D, skyTexture);
       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
@@ -1015,6 +1158,7 @@ namespace {
       // -------------------------------------------------------------------
       glUseProgram(pathShader);
       applyDirectionalLight(pathShader, moonLight, glmViewPos);
+      applyPointLights(pathShader, lanternLights);
       glUniformMatrix4fv(pathU.view, 1, GL_FALSE, glView.data());
       glUniformMatrix4fv(pathU.projection, 1, GL_FALSE, glProj.data());
       glUniformMatrix4fv(pathU.model, 1, GL_FALSE, identity.getData());
@@ -1104,6 +1248,12 @@ namespace {
     glDeleteTextures(1, &archerTexture);
     glDeleteTextures(1, &treeLeavesTexture);
     glDeleteTextures(1, &treeLogTexture);
+    glDeleteTextures(1, &lanternColorTex);
+    glDeleteTextures(1, &lanternNormalTex);
+    glDeleteTextures(1, &lanternRoughnessTex);
+    glDeleteTextures(1, &lanternMetallicTex);
+    glDeleteTextures(1, &lanternAOTex);
+    glDeleteTextures(1, &lanternOpacityTex);
 
     glDeleteVertexArrays(1, &grass.vao);
     glDeleteBuffers(1, &grass.vbo);
@@ -1115,6 +1265,7 @@ namespace {
     glDeleteProgram(pathShader);
     glDeleteProgram(lineShader);
     glDeleteProgram(shaderAnim);
+    glDeleteProgram(lanternShader);
     return 0;
   }
 
