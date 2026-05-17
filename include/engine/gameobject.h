@@ -14,7 +14,8 @@ public:
     float scale;
     float animationTime;
     bool isActive;
-
+    int type = 1;
+    
     AnimatedModel* model;
     std::string currentAnimation;
     std::vector<std::string> idleAnimations;

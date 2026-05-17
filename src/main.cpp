@@ -141,9 +141,10 @@ namespace {
     // Alinhamento 1 cobre texturas com largura "estranha" (alguns JPGs).
     // Restauramos para 4 ao final para não afetar uploads futuros.
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-
+    
     int w, h, channels;
     unsigned char *data = stbi_load(path, &w, &h, &channels, forcedChannels);
+
 
     if (!data) {
       std::cout << "ERRO: Falha ao carregar a textura " << path << std::endl;
@@ -708,10 +709,23 @@ namespace {
     enemyRunner.SetIdleAnimations({"run"});
     unsigned int enemyTexture = loadTexture("data/textures/zombie.png");
 
+    AnimatedModel arquebusBase("data/models/arquebus/arquebusT.glb");
+    arquebusBase.LoadAnimation("idle1", "data/models/arquebus/arquebusIdle.glb");
+    unsigned int arquebusTex = loadTexture("data/textures/arquebus.png");
+    unsigned int arquebusNormalTex = loadTexture("data/textures/arquebusnormal.png");
+
     std::vector<Vertex> bowVertices;
     if (!Parser("data/models/Archer/bow.obj", bowVertices)) {
       std::cout << "ERRO: Nao encontrou data/models/Archer/bow.obj" << std::endl;
     }
+
+
+    std::vector<Vertex> arquebusVertices;
+    if (!Parser("data/models/arquebus/arquebusweapon.obj", arquebusVertices)) {
+      std::cout << "ERRO: Nao encontrou arquebusweapon.obj" << std::endl;
+    }
+    Mesh arquebusMesh(arquebusVertices);
+    unsigned int arquebusTexture = loadTexture("data/textures/arquebusweapon.png");
 
     std::vector<Vertex> castleVertices;
     Parser("data/models/world/castle.obj", castleVertices); 
@@ -1082,6 +1096,27 @@ namespace {
       glUniform1i(glGetUniformLocation(shaderAnim, "tex"), 0);
 
       for (auto& unit : defenders) {
+          
+          if (unit.type == 1) {
+              glActiveTexture(GL_TEXTURE0);
+              glBindTexture(GL_TEXTURE_2D, archerTexture);
+              glUniform1i(glGetUniformLocation(shaderAnim, "tex"), 0);
+
+              glActiveTexture(GL_TEXTURE1);
+              glBindTexture(GL_TEXTURE_2D, archerNormalTex);
+              glUniform1i(glGetUniformLocation(shaderAnim, "normalMap"), 1);
+          } 
+          else if (unit.type == 2) {
+              glActiveTexture(GL_TEXTURE0);
+              glBindTexture(GL_TEXTURE_2D, arquebusTex);
+              glUniform1i(glGetUniformLocation(shaderAnim, "tex"), 0);
+
+              glActiveTexture(GL_TEXTURE1);
+              glBindTexture(GL_TEXTURE_2D, arquebusNormalTex);
+              glUniform1i(glGetUniformLocation(shaderAnim, "normalMap"), 1);
+          }
+
+          // 2. Desenha a unidade
           unit.Draw(shaderAnim);
       }
 
@@ -1092,27 +1127,56 @@ namespace {
       glUniformMatrix4fv(objU.projection, 1, GL_FALSE, glProj.data());
 
       for (auto& unit : defenders) {
-          glm::mat4 handWorldMatrix = unit.GetBoneWorldTransform("mixamorig:LeftHand");
+          if (unit.type == 1) {
+              glm::mat4 handWorldMatrix = unit.GetBoneWorldTransform("mixamorig:LeftHand");
 
-          glm::mat4 offset = glm::mat4(0.0f);
-          float s = 5.0f;
+              glm::mat4 offset = glm::mat4(0.0f);
+              float s = 5.0f;
 
-          offset[0][2] = s;
-          offset[1][1] = s;
-          offset[2][0] = -s;
-          offset[3][3] = 1.0f;
 
-          offset[3][0] = 0.0f; offset[3][1] = -7.0f; offset[3][2] = 0.0f;
-          glm::mat4 finalBowMatrix = handWorldMatrix * offset;
+              offset[0][2] = s;
+              offset[1][1] = s;
+              offset[2][0] = -s;
+              offset[3][3] = 1.0f;
 
-          glUniformMatrix4fv(objU.model, 1, GL_FALSE, glm::value_ptr(finalBowMatrix));
+              offset[3][0] = 0.0f; offset[3][1] = -7.0f; offset[3][2] = 0.0f;
+              glm::mat4 finalBowMatrix = handWorldMatrix * offset;
 
-          glActiveTexture(GL_TEXTURE0);
-          glBindTexture(GL_TEXTURE_2D, bowTexture);
-          glUniform1i(glGetUniformLocation(objShader, "tex"), 0);
+              glUniformMatrix4fv(objU.model, 1, GL_FALSE, glm::value_ptr(finalBowMatrix));
 
-          bowMesh.Draw();
-          if (!curvePoints.empty()) {
+              glActiveTexture(GL_TEXTURE0);
+              glBindTexture(GL_TEXTURE_2D, bowTexture);
+              glUniform1i(glGetUniformLocation(objShader, "tex"), 0);
+
+              bowMesh.Draw();
+          }
+          else if (unit.type == 2) {
+        
+              glm::mat4 handWorldMatrix = unit.GetBoneWorldTransform("mixamorig:LeftHand");
+
+          
+              float s = 8.0f;
+              Matrix<4, 4> mScale = scale<4, 4>(s, s, s);
+              Matrix<4, 4> mRotY = rotateY<4, 4>(-math_constants::kHalfPi);
+              Matrix<4, 4> mRotX = rotateX<4, 4>(-20.0f * math_constants::kDegToRad);
+              Matrix<4, 4> mRotZ = rotateZ<4, 4>(-math_constants::kHalfPi);             
+              Matrix<4, 4> mTrans = translate<4, 4>(0.0f, 0.0f, -4.0f);
+              Matrix<4, 4> customOffset = mTrans * mRotY * mRotX * mScale *mRotZ;
+
+              auto glCustomOffset = toOpenGLMatrix(customOffset);
+              glm::mat4 glmOffset = glm::make_mat4(glCustomOffset.data());
+
+              glm::mat4 finalWeaponMatrix = handWorldMatrix * glmOffset;
+
+              glUniformMatrix4fv(objU.model, 1, GL_FALSE, glm::value_ptr(finalWeaponMatrix));
+              glActiveTexture(GL_TEXTURE0);
+              glBindTexture(GL_TEXTURE_2D, arquebusTexture);
+              glUniform1i(glGetUniformLocation(objShader, "tex"), 0);
+
+              arquebusMesh.Draw();
+          }
+         }
+        if (!curvePoints.empty()) {
             // Pega o último ponto da curva gerada pelo Catmull-Rom
             Point endPoint = curvePoints.back(); 
             float offsetX = 4.0f; 
@@ -1138,7 +1202,6 @@ namespace {
 
             castleMesh.Draw();
 
-        }
       }
 
       // -------------------------------------------------------------------
@@ -1372,7 +1435,9 @@ namespace {
           glUniform4fv(glGetUniformLocation(previewShader, "previewColor"), 1, glm::value_ptr(hColor));
 
           // 8. Desenha o "Fantasma" na posição do mouse
-          GameObject previewGhost(&archerBase, groundPos);
+          AnimatedModel* previewModel = (state.selectedTroopType == 1) ? &archerBase : &arquebusBase;
+
+          GameObject previewGhost(previewModel, groundPos);
           previewGhost.SetAnimation("idle1");
           previewGhost.Update(deltaTime);
           previewGhost.Draw(previewShader);
@@ -1382,17 +1447,25 @@ namespace {
           // 9. Confirmação do clique esquerdo (Só permite se a área for válida!)
           ImGuiIO& io = ImGui::GetIO();
           if (!waitingForRelease && !isInvalidPlacement && 
-              glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS && !io.WantCaptureMouse) {
-              
+          glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS && !io.WantCaptureMouse) 
+          {
+          if (state.selectedTroopType == 1) {
               state.gold -= 50; 
-
-              // Instancia o Arqueiro definitivo no mapa
               GameObject newArcher(&archerBase, groundPos);
+              newArcher.type = 1;
               newArcher.SetIdleAnimations({"idle1"});
               defenders.push_back(newArcher);
+          } 
+          else if (state.selectedTroopType == 2) {
+              state.gold -= 75; 
+              GameObject newArquebus(&arquebusBase, groundPos);
+              newArquebus.type = 2; 
+              newArquebus.SetIdleAnimations({"idle1"});
+              defenders.push_back(newArquebus);
+          }
 
-              state.isPlacingTroop = false;
-              waitingForRelease = true;
+          state.isPlacingTroop = false;
+          waitingForRelease = true;
           }
 
           // 10. Cancelar posicionamento com botão direito

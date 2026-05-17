@@ -106,20 +106,30 @@ void Hud::Render(const AppState& state, float fps) {
                                   IM_COL32(100, 80, 50, 255), 2.0f);
             }
 
-            
+            //Arqueiro
             if (i == 0) {
                 ImGui::SetCursorPos(ImVec2(slotX + (itemWidth - 60.0f) / 2.0f, (topBarHeight - 60.0f) / 2.0f));
                 
-                // Se estiver selecionado, desenha um brilho em volta
-                // if (state.selectedTower == ARCHER) { 
-                //    drawList->AddRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax(), IM_COL32(255, 255, 0, 200), 5.0f, 0, 3.0f);
-                // }
 
                 if (ImGui::ImageButton("btn_archer", (void*)(intptr_t)m_textures.archerIcon, ImVec2(50, 50))) {
                     
                     if (state.gold >= 50) { 
                         const_cast<AppState&>(state).isPlacingTroop = true;
                         const_cast<AppState&>(state).selectedTroopType = 1; // 1 = Arqueiro
+                    }
+                }
+            }
+
+
+            //Arcabuz
+            if (i == 1) { 
+                ImGui::SetCursorPos(ImVec2(slotX + (itemWidth - 60.0f) / 2.0f, (topBarHeight - 60.0f) / 2.0f));
+                
+                
+                if (ImGui::ImageButton("btn_arquebus", (void*)(intptr_t)m_textures.archerIcon, ImVec2(50, 50))) {
+                    if (state.gold >= 75) { 
+                        const_cast<AppState&>(state).isPlacingTroop = true;
+                        const_cast<AppState&>(state).selectedTroopType = 2; 
                     }
                 }
             }

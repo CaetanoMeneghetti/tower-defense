@@ -22,6 +22,7 @@ bool Parser(const std::string &path, std::vector<Vertex> &out_vertices) {
     } else if (lineHeader == "vt") {
       Vec2 tex;
       file >> tex.x >> tex.y;
+      tex.y = 1.0f - tex.y;
       temp_texCoords.push_back(tex);
     } else if (lineHeader == "vn") {
       Vec3 norm;
