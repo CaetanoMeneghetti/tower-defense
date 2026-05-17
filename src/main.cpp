@@ -125,6 +125,32 @@ namespace {
       : view(v), projection(p), model(m) {}
   };
 
+  // Stats de inimigo (HP, velocidade no path, dano ao castelo).
+  // Para novos tipos basta instanciar com valores diferentes — a logica de
+  // update e generica.
+  struct EnemyStats {
+    int maxHp;
+    float speed;
+    int damage;
+  };
+
+  // Estado runtime de um inimigo unico percorrendo o path.
+  struct EnemyInstance {
+    EnemyStats stats;
+    int hp;
+    float pathDistance;
+    bool alive;
+    float respawnTimer;
+    // Tempo restante de flash vermelho ao receber hit.
+    float hitFlashTime;
+  };
+
+  // Estado de tiro de cada defensor (paralelo ao vector defenders).
+  struct DefenderShoot {
+    float shootTimer;
+    bool aiming;
+  };
+
   AppState &stateFromWindow(GLFWwindow *window) {
     return *static_cast<AppState *>(glfwGetWindowUserPointer(window));
   }
@@ -141,7 +167,7 @@ namespace {
     // Alinhamento 1 cobre texturas com largura "estranha" (alguns JPGs).
     // Restauramos para 4 ao final para não afetar uploads futuros.
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    
+
     int w, h, channels;
     unsigned char *data = stbi_load(path, &w, &h, &channels, forcedChannels);
 
@@ -555,16 +581,16 @@ namespace {
     // 6. Encontrar o ponto de interseção exato com o plano do chão (Y = 0)
     // Equação da reta: P = Origem + Raio * t -> Queremos P.y = 0
     if (rayWorld[1] >= 0.0f) {
-        return Vector<3>{0.0f, 0.0f, 0.0f}; 
+        return Vector<3>{0.0f, 0.0f, 0.0f};
     }
-    
+
     float t = -camPos[1] / rayWorld[1];
-    
+
     Vector<3> result;
     result[0] = camPos[0] + rayWorld[0] * t;
-    result[1] = 0.0f; 
+    result[1] = 0.0f;
     result[2] = camPos[2] + rayWorld[2] * t;
-    
+
     return result;
 }
 
@@ -590,7 +616,7 @@ namespace {
       uiTextures.goldIcon      = loadTexture("data/textures/ui_gold.png", 4);
       uiTextures.healthIcon    = loadTexture("data/textures/ui_health.png", 4);
       uiTextures.archerIcon    = loadTexture("data/textures/ui_archer.png", 4);
-      
+
       gameHud.SetTextures(uiTextures);
 
     // ---------------------------------------------------------------------
@@ -626,10 +652,10 @@ namespace {
         glGetUniformLocation(groundShader, "view"),
         glGetUniformLocation(groundShader, "projection"),
         glGetUniformLocation(groundShader, "grass"),
-      glGetUniformLocation(groundShader, "noise"),
-      glGetUniformLocation(groundShader, "fogColor"),
-      glGetUniformLocation(groundShader, "fogStart"),
-      glGetUniformLocation(groundShader, "fogEnd"),
+        glGetUniformLocation(groundShader, "noise"),
+        glGetUniformLocation(groundShader, "fogColor"),
+        glGetUniformLocation(groundShader, "fogStart"),
+        glGetUniformLocation(groundShader, "fogEnd"),
     };
     ObjUniforms objU{
         glGetUniformLocation(objShader, "view"),
@@ -719,7 +745,6 @@ namespace {
       std::cout << "ERRO: Nao encontrou data/models/Archer/bow.obj" << std::endl;
     }
 
-
     std::vector<Vertex> arquebusVertices;
     if (!Parser("data/models/arquebus/arquebusweapon.obj", arquebusVertices)) {
       std::cout << "ERRO: Nao encontrou arquebusweapon.obj" << std::endl;
@@ -728,7 +753,7 @@ namespace {
     unsigned int arquebusTexture = loadTexture("data/textures/arquebusweapon.png");
 
     std::vector<Vertex> castleVertices;
-    Parser("data/models/world/castle.obj", castleVertices); 
+    Parser("data/models/world/castle.obj", castleVertices);
     Mesh castleMesh(castleVertices);
     unsigned int castleTex = loadTexture("data/textures/castle.png");
     unsigned int castleNormalTex = loadTexture("data/textures/castlenormal.png");
@@ -957,10 +982,24 @@ namespace {
     GLint skyTexLoc  = glGetUniformLocation(skyShader, "skyTexture");
 
     // ---------------------------------------------------------------------
-    // MOVIMENTAÇÃO DO PERSONAGEM
+    // INIMIGOS
     // ---------------------------------------------------------------------
-    float characterDistance = 0.0f;
-    const float characterSpeed = 2.0f;
+    // Stats por tipo — quando adicionar novos inimigos, declare aqui.
+    const EnemyStats kZombieStats{50, 2.0f, 20};
+
+    EnemyInstance enemy;
+    enemy.stats = kZombieStats;
+    enemy.hp = enemy.stats.maxHp;
+    enemy.pathDistance = 0.0f;
+    enemy.alive = true;
+    enemy.respawnTimer = 0.0f;
+    enemy.hitFlashTime = 0.0f;
+
+    const float kEnemyRespawnDelay = 2.0f;
+    const float kArcherRange = 10.0f;
+    const float kArcherShootInterval = 1.0f;
+    const int kArcherArrowDamage = 10;
+    const float kEnemyHitFlashDuration = 0.15f;
 
     // ---------------------------------------------------------------------
     // LOOP PRINCIPAL
@@ -978,10 +1017,7 @@ namespace {
     archerBase.LoadAnimation("idle4", "data/models/Archer/Idle4.glb");
     archerBase.LoadAnimation("aim", "data/models/Archer/AimDraw.glb");
     std::vector<GameObject> defenders;
-
-    defenders.push_back(GameObject(&archerBase, Vector<3>{ 0.0f, 0.1f, 0.0f }));
-
-    defenders.back().SetIdleAnimations({"idle1"});
+    std::vector<DefenderShoot> defenderShoots;
 
     // ---------------------------------------------------------------------
     // LUZ DIRECIONAL — lua noturna (fria, azulada)
@@ -1015,14 +1051,96 @@ namespace {
 
       const float deltaTime = static_cast<float>(frameDelay);
 
-      for (auto& unit : defenders) {
-          unit.Update(deltaTime);
+      // -------------------------------------------------------------------
+      // UPDATE INIMIGO
+      // -------------------------------------------------------------------
+      if (enemy.alive) {
+        enemy.pathDistance += enemy.stats.speed * deltaTime;
+        enemyRunner.Update(deltaTime);
+      } else {
+        enemy.respawnTimer -= deltaTime;
+        if (enemy.respawnTimer <= 0.0f) {
+          enemy.hp = enemy.stats.maxHp;
+          enemy.pathDistance = 0.0f;
+          enemy.alive = true;
+          enemy.hitFlashTime = 0.0f;
+        }
       }
-      enemyRunner.Update(deltaTime);
+
+      if (enemy.hitFlashTime > 0.0f) {
+        enemy.hitFlashTime -= deltaTime;
+        if (enemy.hitFlashTime < 0.0f) enemy.hitFlashTime = 0.0f;
+      }
+
+      // Posicao atual do inimigo no path (somente faz sentido quando vivo).
+      float characterAngle = 0.0f;
+      bool hasReachedEnd = false;
+      Vector<3> characterPos = getPositionAtDistance(
+          curvePoints, curveCache, enemy.pathDistance, characterAngle, hasReachedEnd);
+
+      if (enemy.alive && hasReachedEnd) {
+        state.health -= enemy.stats.damage;
+        if (state.health < 0) state.health = 0;
+        enemy.alive = false;
+        enemy.respawnTimer = kEnemyRespawnDelay;
+      }
+
+      // -------------------------------------------------------------------
+      // UPDATE DEFENSORES (anima + logica de tiro)
+      // -------------------------------------------------------------------
+      if (defenderShoots.size() < defenders.size()) {
+        defenderShoots.resize(defenders.size(), DefenderShoot{0.0f, false});
+      }
+
+      for (size_t i = 0; i < defenders.size(); ++i) {
+        auto &unit = defenders[i];
+        auto &shoot = defenderShoots[i];
+
+        // Apenas arqueiros (type 1) atiram por enquanto — arquebus nao tem
+        // animacao de aim carregada.
+        if (unit.type == 1) {
+          bool canShoot = false;
+          float dxToEnemy = 0.0f;
+          float dzToEnemy = 0.0f;
+          if (enemy.alive) {
+            dxToEnemy = characterPos[0] - unit.position[0];
+            dzToEnemy = characterPos[2] - unit.position[2];
+            const float distSq = dxToEnemy * dxToEnemy + dzToEnemy * dzToEnemy;
+            canShoot = (distSq <= kArcherRange * kArcherRange);
+          }
+
+          if (canShoot) {
+            // Vira o arqueiro para o inimigo (mesma convencao usada pelas lanternas
+            // e pelo enemyRunner que segue o path).
+            unit.rotationY = -std::atan2(dxToEnemy, dzToEnemy);
+
+            if (!shoot.aiming) {
+              unit.SetAnimation("aim");
+              shoot.aiming = true;
+              shoot.shootTimer = 0.0f;
+            }
+            shoot.shootTimer += deltaTime;
+            if (shoot.shootTimer >= kArcherShootInterval) {
+              shoot.shootTimer -= kArcherShootInterval;
+              enemy.hp -= kArcherArrowDamage;
+              enemy.hitFlashTime = kEnemyHitFlashDuration;
+              if (enemy.hp <= 0) {
+                enemy.hp = 0;
+                enemy.alive = false;
+                enemy.respawnTimer = kEnemyRespawnDelay;
+              }
+            }
+          } else if (shoot.aiming) {
+            shoot.aiming = false;
+            shoot.shootTimer = 0.0f;
+            unit.SetIdleAnimations({"idle1"});
+          }
+        }
+
+        unit.Update(deltaTime);
+      }
 
       lastTime += frameDelay;
-
-      characterDistance += characterSpeed * deltaTime;
 
       processInput(window, cameraPosition, deltaTime);
 
@@ -1053,33 +1171,33 @@ namespace {
       // -------------------------------------------------------------------
       // ENTIDADES OPACAS
       // -------------------------------------------------------------------
-      float characterAngle = 0.0f;
-      bool hasReachedEnd = false;
-      Vector<3> characterPos = getPositionAtDistance(curvePoints, curveCache, characterDistance, characterAngle, hasReachedEnd);
-
-      Matrix<4, 4> characterTranslate = translate<4, 4>(characterPos[0], characterPos[1], characterPos[2]);
-      Matrix<4, 4> characterRotateY = rotateY<4, 4>(characterAngle);
-      Matrix<4, 4> characterRotateX = rotateX<4, 4>(-math_constants::kHalfPi);
-      Matrix<4, 4> characterModel = characterTranslate * characterRotateY * characterRotateX;
-      auto glModel = toOpenGLMatrix(characterModel);
-
       // Mudança obj estático pra glb com animação
       glUseProgram(shaderAnim);
       applyDirectionalLight(shaderAnim, moonLight, glmViewPos);
       applyPointLights(shaderAnim, lanternLights);
       glUniformMatrix4fv(glGetUniformLocation(shaderAnim, "view"), 1, GL_FALSE, glView.data());
       glUniformMatrix4fv(glGetUniformLocation(shaderAnim, "projection"), 1, GL_FALSE, glProj.data());
+      // Por padrao sem flash; cada Draw que quiser tinge sobrescreve.
+      glUniform1f(glGetUniformLocation(shaderAnim, "hitFlash"), 0.0f);
 
-
-      glActiveTexture(GL_TEXTURE0);
-      glBindTexture(GL_TEXTURE_2D, enemyTexture);
-      glUniform1i(glGetUniformLocation(shaderAnim, "tex"), 0);
-      enemyRunner.position = characterPos;
-      enemyRunner.rotationY = characterAngle;
-      glActiveTexture(GL_TEXTURE1);
-      glBindTexture(GL_TEXTURE_2D, defaultNormal);
-      glUniform1i(glGetUniformLocation(shaderAnim, "normalMap"), 1);
-      enemyRunner.Draw(shaderAnim);
+      if (enemy.alive) {
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, enemyTexture);
+        glUniform1i(glGetUniformLocation(shaderAnim, "tex"), 0);
+        enemyRunner.position = characterPos;
+        enemyRunner.rotationY = characterAngle;
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, defaultNormal);
+        glUniform1i(glGetUniformLocation(shaderAnim, "normalMap"), 1);
+        const float flash =
+            (kEnemyHitFlashDuration > 0.0f)
+                ? (enemy.hitFlashTime / kEnemyHitFlashDuration)
+                : 0.0f;
+        glUniform1f(glGetUniformLocation(shaderAnim, "hitFlash"), flash);
+        enemyRunner.Draw(shaderAnim);
+        // Reseta para nao vazar nos proximos desenhos (defensores, etc).
+        glUniform1f(glGetUniformLocation(shaderAnim, "hitFlash"), 0.0f);
+      }
 
       glActiveTexture(GL_TEXTURE1);
       glBindTexture(GL_TEXTURE_2D, archerNormalTex);
@@ -1096,7 +1214,7 @@ namespace {
       glUniform1i(glGetUniformLocation(shaderAnim, "tex"), 0);
 
       for (auto& unit : defenders) {
-          
+
           if (unit.type == 1) {
               glActiveTexture(GL_TEXTURE0);
               glBindTexture(GL_TEXTURE_2D, archerTexture);
@@ -1105,7 +1223,7 @@ namespace {
               glActiveTexture(GL_TEXTURE1);
               glBindTexture(GL_TEXTURE_2D, archerNormalTex);
               glUniform1i(glGetUniformLocation(shaderAnim, "normalMap"), 1);
-          } 
+          }
           else if (unit.type == 2) {
               glActiveTexture(GL_TEXTURE0);
               glBindTexture(GL_TEXTURE_2D, arquebusTex);
@@ -1151,15 +1269,13 @@ namespace {
               bowMesh.Draw();
           }
           else if (unit.type == 2) {
-        
               glm::mat4 handWorldMatrix = unit.GetBoneWorldTransform("mixamorig:LeftHand");
 
-          
               float s = 8.0f;
               Matrix<4, 4> mScale = scale<4, 4>(s, s, s);
               Matrix<4, 4> mRotY = rotateY<4, 4>(-math_constants::kHalfPi);
               Matrix<4, 4> mRotX = rotateX<4, 4>(-20.0f * math_constants::kDegToRad);
-              Matrix<4, 4> mRotZ = rotateZ<4, 4>(-math_constants::kHalfPi);             
+              Matrix<4, 4> mRotZ = rotateZ<4, 4>(-math_constants::kHalfPi);
               Matrix<4, 4> mTrans = translate<4, 4>(0.0f, 0.0f, -4.0f);
               Matrix<4, 4> customOffset = mTrans * mRotY * mRotX * mScale *mRotZ;
 
@@ -1178,24 +1294,24 @@ namespace {
          }
         if (!curvePoints.empty()) {
             // Pega o último ponto da curva gerada pelo Catmull-Rom
-            Point endPoint = curvePoints.back(); 
-            float offsetX = 4.0f; 
-            float offsetY = 0.0f;  
-            float offsetZ = 4.0;  
-            
+            Point endPoint = curvePoints.back();
+            float offsetX = 4.0f;
+            float offsetY = 0.0f;
+            float offsetZ = 4.0;
+
             Matrix<4, 4> castleTranslate = translate<4, 4>(endPoint.x + offsetX, 0.0f + offsetY, endPoint.y + offsetZ);
-            float anguloGiroGraus = -55.0f; 
+            float anguloGiroGraus = -55.0f;
             Matrix<4, 4> castleRotY = rotateY<4, 4>(anguloGiroGraus * math_constants::kDegToRad);
             Matrix<4, 4> castleScale     = scale<4, 4>(0.072, 0.072f, 0.072f); // Ajuste o tamanho se necessário
             Matrix<4, 4> castleModel = castleTranslate * castleRotY * castleScale;
             auto glCastleModel = toOpenGLMatrix(castleModel);
 
-            
+
             glUniformMatrix4fv(objU.model, 1, GL_FALSE, glCastleModel.data());
             glActiveTexture(GL_TEXTURE0);
             glBindTexture(GL_TEXTURE_2D, castleTex);
             glUniform1i(glGetUniformLocation(objShader, "tex"), 0);
-            
+
             glActiveTexture(GL_TEXTURE1);
             glBindTexture(GL_TEXTURE_2D, castleNormalTex);
             glUniform1i(glGetUniformLocation(objShader, "normalMap"), 1);
@@ -1404,13 +1520,13 @@ namespace {
           // 2. Calcula a distância exata do mouse até a linha central do caminho
           float distToPath = distanceToPath(curvePoints, groundPos[0], groundPos[2]);
 
-          // 3. Validação 1: Está EM CIMA da estrada de terra? 
+          // 3. Validação 1: Está EM CIMA da estrada de terra?
           // kPathHalfWidth é 2.0f. Adicionamos uma pequena folga de 0.5f para limpar o visual do caminho.
-          bool isOnPath = (distToPath < (kPathHalfWidth + 0.5f)); 
+          bool isOnPath = (distToPath < (kPathHalfWidth + 0.5f));
 
           // 4. Validação 2: Está MUITO LONGE do caminho?
           // 12.0f cria uma faixa perfeita para colocar defensores ao longo da estrada.
-          float maxAllowedDist = 12.0f; 
+          float maxAllowedDist = 12.0f;
           bool isTooFar = (distToPath > maxAllowedDist);
 
           // Regra solicitada: Inválido APENAS se estiver no path OU muito longe dele
@@ -1446,22 +1562,24 @@ namespace {
 
           // 9. Confirmação do clique esquerdo (Só permite se a área for válida!)
           ImGuiIO& io = ImGui::GetIO();
-          if (!waitingForRelease && !isInvalidPlacement && 
-          glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS && !io.WantCaptureMouse) 
+          if (!waitingForRelease && !isInvalidPlacement &&
+          glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS && !io.WantCaptureMouse)
           {
           if (state.selectedTroopType == 1) {
-              state.gold -= 50; 
+              state.gold -= 50;
               GameObject newArcher(&archerBase, groundPos);
               newArcher.type = 1;
               newArcher.SetIdleAnimations({"idle1"});
               defenders.push_back(newArcher);
-          } 
+              defenderShoots.push_back(DefenderShoot{0.0f, false});
+          }
           else if (state.selectedTroopType == 2) {
-              state.gold -= 75; 
+              state.gold -= 75;
               GameObject newArquebus(&arquebusBase, groundPos);
-              newArquebus.type = 2; 
+              newArquebus.type = 2;
               newArquebus.SetIdleAnimations({"idle1"});
               defenders.push_back(newArquebus);
+              defenderShoots.push_back(DefenderShoot{0.0f, false});
           }
 
           state.isPlacingTroop = false;

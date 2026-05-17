@@ -12,6 +12,8 @@ in float vHasTangent;
 uniform sampler2D tex;
 uniform sampler2D normalMap;
 uniform vec3 viewPos;
+// 0..1: intensidade do flash vermelho (ex: hit do inimigo).
+uniform float hitFlash;
 
 // Luz direcional (sol/lua)
 struct DirLight {
@@ -105,6 +107,8 @@ void main() {
     vec3 viewDir = normalize(viewPos - FragPos);
     vec3 lit = calcDirLight(norm, viewDir, texColor.rgb)
              + calcPointLights(norm, FragPos, viewDir, texColor.rgb);
-             
+
+    lit = mix(lit, vec3(1.0, 0.0, 0.0), clamp(hitFlash, 0.0, 1.0));
+
     fragColor = vec4(lit, texColor.a);
 }

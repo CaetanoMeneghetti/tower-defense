@@ -4,7 +4,7 @@
 struct AppState {
     //info do jogador
     int gold = 99999;
-    int health = 20;
+    int health = 100;
 
     //sistema de tropas
     bool isPlacingTroop = false;
