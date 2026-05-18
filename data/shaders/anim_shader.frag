@@ -95,10 +95,6 @@ void main() {
         
         mat3 perfectTBN = mat3(T, B, N);
 
-         
-        // para diminuir a profundidade do normal map tlvz
-        mapNormal.xy *= 1;
-
         norm = normalize(perfectTBN * mapNormal);
     } else {
         norm = normalize(Normal);

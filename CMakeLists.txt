@@ -7,33 +7,60 @@
 # ser compilados.
 set(SOURCES
   src/main.cpp
+
+  # engine — primitivas reutilizáveis (modelos, mesh, shaders, câmera, HUD…)
+  src/engine/animated_model.cpp
   src/engine/camera.cpp
   src/engine/catmull_rom.cpp
+  src/engine/game_object.cpp
+  src/engine/hud.cpp
   src/engine/lighting.cpp
   src/engine/mesh.cpp
-  src/engine/parser.cpp
-  src/engine/gameobject.cpp
-  src/engine/hud.cpp
-  src/engine/shader_utils.cpp
-  src/engine/animatedmodel.cpp
-  src/utils/glad.c
+  src/engine/obj_loader.cpp
+  src/engine/primitive_meshes.cpp
+  src/engine/shader_program.cpp
+  src/engine/texture_loader.cpp
+
+  # game — regras de jogo (combate, placement, geração de cena)
+  src/game/defender_system.cpp
+  src/game/enemy_system.cpp
+  src/game/path_navigation.cpp
+  src/game/scene.cpp
+  src/game/troop_placement.cpp
+  src/game/troop_selection.cpp
+  src/game/upgrade_system.cpp
+
+  # input — callbacks GLFW + controle de câmera
+  src/input/camera_controller.cpp
+  src/input/input_handler.cpp
+
+  # render — desenho da cena
+  src/render/scene_renderer.cpp
+  src/render/shader_uniforms.cpp
+
+  # world — geração procedural do caminho de terra
   src/world/path_generator.cpp
+
+  # utils / 3rd-party
+  src/utils/glad.c
   src/imgui/imgui.cpp
   src/imgui/imgui_draw.cpp
   src/imgui/imgui_tables.cpp
   src/imgui/imgui_widgets.cpp
   src/imgui/imgui_impl_glfw.cpp
   src/imgui/imgui_impl_opengl3.cpp
-  
 )
 
 cmake_minimum_required(VERSION 3.5.0)
 
 project(LAB_FCG VERSION 1.0.0)
 
-set(CMAKE_CXX_STANDARD          11)
+set(CMAKE_CXX_STANDARD          17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS        OFF)
+
+# Garante que <GLFW/glfw3.h> nao puxe gl.h (evita conflito com glad)
+add_definitions(-DGLFW_INCLUDE_NONE)
 
 if(WIN32)
   set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG   "${PROJECT_SOURCE_DIR}/bin/Debug")

@@ -60,7 +60,7 @@ Será utilizado o método bounding-box para a checagem de colisão entre os inim
 Será utilizado o termo especular (Blinn-Phong), termo ambiente e termo difuso (Lambert).
 
 ### Mapeamento de texturas em todos os objetos
-Os modelos 3D dos soldados terão texturas  mapeadas para reprentar detalhes como a malha de aço da armadura, brasões de nações, e outras características. As texturas serão extraídas de maneira semelhante as malhas poligonais (arquivo .texture do jogo alvo -> .dds -> .png), o mapeamento UV dos assets é desconexo, portanto, será realizado o mapeamento e configuração manual da textura para o modelo.
+Os modelos 3D dos soldados terão texturas  mapeadas para reprentar detalhes como a malha de aço da armadura, brasões de nações, e outras características. As texturas serão extraídas de maneira semelhante as malhas poligonais (arquivo .texture do jogo alvo -> .dds -> .png), o mapeamento UV dos assets é desconexo, portanto, será realizado o mapeamento e configuração manual da textura para o modelo (Atualização: No caso, o mapeamento da malha poligonal dos models para textura é extraído, sendo necessário apenas a translação e algumas vezes modificação de escala da malha 2D do mapeamento que já está pronta.)
 
 ### Movimentação com curva Bézier cúbica
 Serão utilizadas curvas de Catmull-Rom para definir o caminho padrão que os inimigos devem traçar até o objetivo.
@@ -77,3 +77,11 @@ Os inimigos terão movimentação com velocidade fixa ao longo do caminho defini
 - O caminho dos inimigos será feito de terra ao invés de pedras, como está nas imagens e vídeo.
 - Os feitiços serão desenhados no mapa do jogo e não em um lugar qualquer como na imagem 1, célula 9.
 - Não vai ter uma unidade que utiliza um lança-chamas (as unidades terão arcos, armas ou espadas)
+
+
+## Atualização
+Colocamos a pasta models e textures no .gitignore para a avaliação parcial devido a questão da licença dos models.
+
+Read.me atualizado com instruções de extração dos models do jogo.
+
+Em relação ao mapeamento UV, os models extraidos já vem com a malha de poligonos para a textura, sendo necessário apenas a translação simples na aba de UV maping no Blender.

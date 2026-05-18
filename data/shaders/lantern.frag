@@ -7,7 +7,6 @@ in vec3 Normal;
 in vec2 texCoord;
 
 uniform sampler2D colorMap;
-uniform sampler2D normalMap;
 uniform sampler2D roughnessMap;
 uniform sampler2D metallicMap;
 uniform sampler2D aoMap;

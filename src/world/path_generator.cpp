@@ -1,6 +1,10 @@
 #include "world/path_generator.h"
 
-int globalSeed = 42;
+namespace {
+// Seed do hash 1D usado para gerar irregularidade das bordas.
+// Mude para regerar o padrão de ruído mantendo a forma da curva.
+constexpr int kNoiseSeed = 42;
+}  // namespace
 
 // Gera a malha 3D (Mesh) do caminho de terra com bordas irregulares
 // Recebe uma lista de pontos centrais (a curva) e a largura base do caminho
@@ -58,7 +62,7 @@ Mesh generatePathMesh(const std::vector<Point> &centerPoints, float baseWidth) {
     // Função geradora de aleatoriedade (Pseudo-Random Hash)
     // Transforma qualquer número inteiro (seed) em um valor caótico entre -1.0 e +1.0
     auto random1D = [&](int localSeed) -> float {
-      float val = std::sin((localSeed + globalSeed) * 12.9898f) * 43758.5453f;
+      float val = std::sin((localSeed + kNoiseSeed) * 12.9898f) * 43758.5453f;
       return (val - std::floor(val)) * 2.0f - 1.0f;
     };
 

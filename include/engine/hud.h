@@ -1,26 +1,32 @@
 #pragma once
-#include <GLFW/glfw3.h>
-#include "app_state.h"
 
-//estrutura para os icones da hud
+#include <GLFW/glfw3.h>
+
+#include "game/app_state.h"
+
+// =============================================================================
+// HUD (ImGui) — barra superior + janela de debug
+// =============================================================================
+
 struct HudTextures {
-    unsigned int topBackground;
-    unsigned int goldIcon;
-    unsigned int healthIcon;
-    unsigned int archerIcon; 
+  unsigned int topBackground;
+  unsigned int goldIcon;
+  unsigned int healthIcon;
+  unsigned int archerIcon;
+  unsigned int arquebusIcon;
 };
 
 class Hud {
-public:
-    Hud();
-    ~Hud();
+ public:
+  Hud();
+  ~Hud();
 
-    void Init(GLFWwindow* window);
-    void SetTextures(const HudTextures& textures);
-    void Render(const AppState& state, float fps);
-    void Shutdown();
+  void init(GLFWwindow *window);
+  void setTextures(const HudTextures &textures);
+  void render(AppState &state, float fps);
+  void shutdown();
 
-private:
-    void SetupStyle();
-    HudTextures m_textures;
+ private:
+  void setupStyle();
+  HudTextures textures_;
 };

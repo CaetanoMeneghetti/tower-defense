@@ -1,15 +1,23 @@
 #pragma once
+
 #include <vector>
-#include "parser.h"
 
+#include "engine/obj_loader.h"
+
+// =============================================================================
+// MESH ESTÁTICA (sem skinning)
+// =============================================================================
+// Usada para OBJs estáticos (castelo, árvores, lanternas, armas). Cada Mesh
+// detém seu VAO/VBO; o destrutor não libera (legado — gerencie via run()).
 class Mesh {
-public:
-    std::vector<Vertex> vertices;
-    unsigned int VAO, VBO;
+ public:
+  std::vector<Vertex> vertices;
+  unsigned int vao = 0;
+  unsigned int vbo = 0;
 
-    Mesh(std::vector<Vertex> vertices);
-    void Draw();
+  Mesh(std::vector<Vertex> vertices);
+  void draw();
 
-private:
-    void setupMesh();
+ private:
+  void setupMesh();
 };

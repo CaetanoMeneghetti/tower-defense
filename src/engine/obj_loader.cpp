@@ -1,10 +1,10 @@
-#include "engine/parser.h"
+#include "engine/obj_loader.h"
 
 #include <fstream>
 #include <iostream>
 #include <sstream>
 
-bool Parser(const std::string &path, std::vector<Vertex> &out_vertices) {
+bool loadObj(const std::string &path, std::vector<Vertex> &out_vertices) {
   // Listas temporárias pra guardar os dados do .obj
   std::vector<Vec3> temp_positions;
   std::vector<Vec2> temp_texCoords;
@@ -29,24 +29,38 @@ bool Parser(const std::string &path, std::vector<Vertex> &out_vertices) {
       file >> norm.x >> norm.y >> norm.z;
       temp_normals.push_back(norm);
     } else if (lineHeader == "f") {
-      for (int i = 0; i < 3; i++) {
-        std::string vertexStr;
-        file >> vertexStr;
+      // Lê a linha toda da face — pode ter 3 (tri), 4 (quad) ou mais
+      // vértices (n-gono). Triangulamos como fan a partir de v0:
+      //   (v0, v1, v2), (v0, v2, v3), (v0, v3, v4), ...
+      // Sem isso, OBJs com quads perdem metade dos triângulos.
+      std::string restOfLine;
+      std::getline(file, restOfLine);
+      std::stringstream lineStream(restOfLine);
 
+      std::vector<Vertex> faceVertices;
+      std::string vertexStr;
+      while (lineStream >> vertexStr) {
         // 1/1/1 -> 1 1 1
-        for (char &c : vertexStr)
+        for (char &c : vertexStr) {
           if (c == '/') c = ' ';
+        }
 
-        std::stringstream ss(vertexStr);
+        std::stringstream tokenStream(vertexStr);
         int vIdx, vtIdx, vnIdx;
-        ss >> vIdx >> vtIdx >> vnIdx;
+        tokenStream >> vIdx >> vtIdx >> vnIdx;
 
         Vertex v;
         v.position = temp_positions[vIdx - 1];
         v.texcoords = temp_texCoords[vtIdx - 1];
         v.normal = temp_normals[vnIdx - 1];
+        faceVertices.push_back(v);
+      }
 
-        out_vertices.push_back(v);
+      // Triangulação em fan
+      for (size_t i = 1; i + 1 < faceVertices.size(); ++i) {
+        out_vertices.push_back(faceVertices[0]);
+        out_vertices.push_back(faceVertices[i]);
+        out_vertices.push_back(faceVertices[i + 1]);
       }
     }
   }

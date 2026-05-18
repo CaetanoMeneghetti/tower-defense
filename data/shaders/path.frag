@@ -3,8 +3,9 @@
 out vec4 fragColor;
 
 in vec3 FragPos;
-in vec3 Normal;
 in vec2 texCoord;
+// Normal é enviado pelo vertex shader compartilhado mas não usado aqui:
+// o frag deriva a normal via TBN hardcoded + normal map.
 
 uniform sampler2D dirt;
 uniform sampler2D noise;
