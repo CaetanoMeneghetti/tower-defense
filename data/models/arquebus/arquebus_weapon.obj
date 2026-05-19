@@ -1,6 +1,6 @@
 # Blender 5.1.1
 # www.blender.org
-mtllib arquebusweapon.mtl
+mtllib arquebus_weapon.mtl
 o Arquebus
 v 0.101039 0.116002 -2.252091
 v 0.101039 0.036586 -2.351676

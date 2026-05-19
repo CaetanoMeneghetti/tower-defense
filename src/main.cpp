@@ -232,15 +232,15 @@ SceneTextures loadAllSceneTextures() {
   t.defaultNormal      = createDefaultNormalTexture();
 
   t.archerColor        = loadTexture("data/textures/archer.png");
-  t.archerNormal       = loadTexture("data/textures/archernormal.png");
+  t.archerNormal       = loadTexture("data/textures/archer_normal.png");
   t.bowColor           = loadTexture("data/textures/bow.jpg");
 
   t.arquebusColor      = loadTexture("data/textures/arquebus.png");
-  t.arquebusNormal     = loadTexture("data/textures/arquebusnormal.png");
-  t.arquebusWeapon     = loadTexture("data/textures/arquebusweapon.png");
+  t.arquebusNormal     = loadTexture("data/textures/arquebus_normal.png");
+  t.arquebusWeapon     = loadTexture("data/textures/arquebus_weapon.png");
 
   t.castleColor        = loadTexture("data/textures/castle.png");
-  t.castleNormal       = loadTexture("data/textures/castlenormal.png");
+  t.castleNormal       = loadTexture("data/textures/castle_normal.png");
 
   t.treeLog            = loadTexture("data/textures/log.jpeg");
   t.treeLeaves         = loadTexture("data/textures/leaves.png", 4);
@@ -384,51 +384,51 @@ int run(GLFWwindow *window) {
   // ---------------------------------------------------------------------------
   // Modelos animados + estáticos
   // ---------------------------------------------------------------------------
-  AnimatedModel enemyBase("data/models/zombie/zombieT.glb");
-  enemyBase.loadAnimation("run", "data/models/zombie/zombieRun.glb");
+  AnimatedModel enemyBase("data/models/zombie/zombie_t.glb");
+  enemyBase.loadAnimation("run", "data/models/zombie/zombie_run.glb");
 
   // Arcabuz — 5 tiers (sistema de upgrade)
-  AnimatedModel arquebusBase("data/models/arquebus/arquebusT.glb");
-  arquebusBase.loadAnimation("idle1", "data/models/arquebus/arquebusIdle.glb");
-  AnimatedModel arquebusBaseLvl2("data/models/arquebus/arquebusT2.glb");
-  arquebusBaseLvl2.loadAnimation("idle1", "data/models/arquebus/arquebusIdle.glb");
-  AnimatedModel arquebusBaseLvl3("data/models/arquebus/arquebusT3.glb");
-  arquebusBaseLvl3.loadAnimation("idle1", "data/models/arquebus/arquebusIdle.glb");
-  AnimatedModel arquebusBaseLvl4("data/models/arquebus/arquebusT4.glb");
-  arquebusBaseLvl4.loadAnimation("idle1", "data/models/arquebus/arquebusIdle.glb");
-  AnimatedModel arquebusBaseLvl5("data/models/arquebus/arquebusT5.glb");
-  arquebusBaseLvl5.loadAnimation("idle1", "data/models/arquebus/arquebusIdle.glb");
+  AnimatedModel arquebusBase("data/models/arquebus/arquebus_t.glb");
+  arquebusBase.loadAnimation("idle1", "data/models/arquebus/arquebus_idle.glb");
+  AnimatedModel arquebusBaseLvl2("data/models/arquebus/arquebus_t2.glb");
+  arquebusBaseLvl2.loadAnimation("idle1", "data/models/arquebus/arquebus_idle.glb");
+  AnimatedModel arquebusBaseLvl3("data/models/arquebus/arquebus_t3.glb");
+  arquebusBaseLvl3.loadAnimation("idle1", "data/models/arquebus/arquebus_idle.glb");
+  AnimatedModel arquebusBaseLvl4("data/models/arquebus/arquebus_t4.glb");
+  arquebusBaseLvl4.loadAnimation("idle1", "data/models/arquebus/arquebus_idle.glb");
+  AnimatedModel arquebusBaseLvl5("data/models/arquebus/arquebus_t5.glb");
+  arquebusBaseLvl5.loadAnimation("idle1", "data/models/arquebus/arquebus_idle.glb");
 
   // Arqueiro — 5 tiers (sistema de upgrade)
-  AnimatedModel archerBase("data/models/Archer/ArcherT.glb");
-  archerBase.loadAnimation("idle1", "data/models/Archer/Idle1.glb");
-  archerBase.loadAnimation("idle2", "data/models/Archer/Idle2.glb");
-  archerBase.loadAnimation("idle3", "data/models/Archer/Idle3.glb");
-  archerBase.loadAnimation("idle4", "data/models/Archer/Idle4.glb");
-  archerBase.loadAnimation("aim", "data/models/Archer/AimDraw.glb");
-  AnimatedModel archerBaseLvl2("data/models/Archer/archerT2.glb");
-  archerBaseLvl2.loadAnimation("idle1", "data/models/Archer/Idle1.glb");
-  archerBaseLvl2.loadAnimation("idle2", "data/models/Archer/Idle2.glb");
-  archerBaseLvl2.loadAnimation("aim", "data/models/Archer/AimDraw.glb");
-  AnimatedModel archerBaseLvl3("data/models/Archer/archerT3.glb");
-  archerBaseLvl3.loadAnimation("idle1", "data/models/Archer/Idle1.glb");
-  archerBaseLvl3.loadAnimation("aim", "data/models/Archer/AimDraw.glb");
-  AnimatedModel archerBaseLvl4("data/models/Archer/archerT4.glb");
-  archerBaseLvl4.loadAnimation("idle1", "data/models/Archer/Idle1.glb");
-  archerBaseLvl4.loadAnimation("aim", "data/models/Archer/AimDraw.glb");
-  AnimatedModel archerBaseLvl5("data/models/Archer/archerT5.glb");
-  archerBaseLvl5.loadAnimation("idle1", "data/models/Archer/Idle1.glb");
-  archerBaseLvl5.loadAnimation("aim", "data/models/Archer/AimDraw.glb");
+  AnimatedModel archerBase("data/models/archer/archer_t.glb");
+  archerBase.loadAnimation("idle1", "data/models/archer/idle1.glb");
+  archerBase.loadAnimation("idle2", "data/models/archer/idle2.glb");
+  archerBase.loadAnimation("idle3", "data/models/archer/idle3.glb");
+  archerBase.loadAnimation("idle4", "data/models/archer/idle4.glb");
+  archerBase.loadAnimation("aim", "data/models/archer/aim_draw.glb");
+  AnimatedModel archerBaseLvl2("data/models/archer/archer_t2.glb");
+  archerBaseLvl2.loadAnimation("idle1", "data/models/archer/idle1.glb");
+  archerBaseLvl2.loadAnimation("idle2", "data/models/archer/idle2.glb");
+  archerBaseLvl2.loadAnimation("aim", "data/models/archer/aim_draw.glb");
+  AnimatedModel archerBaseLvl3("data/models/archer/archer_t3.glb");
+  archerBaseLvl3.loadAnimation("idle1", "data/models/archer/idle1.glb");
+  archerBaseLvl3.loadAnimation("aim", "data/models/archer/aim_draw.glb");
+  AnimatedModel archerBaseLvl4("data/models/archer/archer_t4.glb");
+  archerBaseLvl4.loadAnimation("idle1", "data/models/archer/idle1.glb");
+  archerBaseLvl4.loadAnimation("aim", "data/models/archer/aim_draw.glb");
+  AnimatedModel archerBaseLvl5("data/models/archer/archer_t5.glb");
+  archerBaseLvl5.loadAnimation("idle1", "data/models/archer/idle1.glb");
+  archerBaseLvl5.loadAnimation("aim", "data/models/archer/aim_draw.glb");
 
   std::vector<Vertex> bowVertices;
-  if (!loadObj("data/models/Archer/bow.obj", bowVertices)) {
-    std::cout << "ERRO: Nao encontrou data/models/Archer/bow.obj" << std::endl;
+  if (!loadObj("data/models/archer/bow.obj", bowVertices)) {
+    std::cout << "ERRO: Nao encontrou data/models/archer/bow.obj" << std::endl;
   }
   Mesh bowMesh(bowVertices);
 
   std::vector<Vertex> arquebusVertices;
-  if (!loadObj("data/models/arquebus/arquebusweapon.obj", arquebusVertices)) {
-    std::cout << "ERRO: Nao encontrou arquebusweapon.obj" << std::endl;
+  if (!loadObj("data/models/arquebus/arquebus_weapon.obj", arquebusVertices)) {
+    std::cout << "ERRO: Nao encontrou arquebus_weapon.obj" << std::endl;
   }
   Mesh arquebusMesh(arquebusVertices);
 

@@ -95,6 +95,17 @@ Por favor, atualize a lista de arquivos fonte no arquivo CMakeLists.txt.")
   endif()
 endforeach()
 
+# IMPORTANTE: no Linux, vários subprojetos do Assimp chamam
+# find_package(Threads REQUIRED). Se não tivermos resolvido Threads
+# antes do FetchContent_MakeAvailable(assimp), eles falham com
+# "Could NOT find Threads (missing: Threads_FOUND)". Por isso
+# configuramos a preferência por -pthread e resolvemos Threads
+# ANTES de puxar o assimp.
+if(UNIX)
+  set(THREADS_PREFER_PTHREAD_FLAG ON)
+  find_package(Threads REQUIRED)
+endif()
+
 include(FetchContent)
 #remoção de módulos inuteis pra compilar + rapido
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Força biblioteca estática para fugir do erro do windres" FORCE)
@@ -104,14 +115,15 @@ set(ASSIMP_BUILD_ZLIB ON CACHE BOOL "Compilar o zlib internamente" FORCE)
 set(INJECT_DEBUG_POSTFIX OFF CACHE BOOL "Evita renomear a lib no modo debug" FORCE)
 
 FetchContent_declare(
-  assimp 
+  assimp
   GIT_REPOSITORY https://github.com/assimp/assimp.git
   GIT_TAG v5.4.1
 )
 
 
-if(MINGW OR CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+if(MINGW)
   # Injeta o big-obj diretamente nas variáveis globais do C++ para o Assimp não ignorar
+  # APENAS NO MINGW
   string(APPEND CMAKE_CXX_FLAGS " -Wa,-mbig-obj")
   string(APPEND CMAKE_C_FLAGS " -Wa,-mbig-obj")
 endif()
@@ -126,7 +138,7 @@ add_custom_command(TARGET ${EXECUTABLE_NAME} POST_BUILD
           $<TARGET_FILE_DIR:${EXECUTABLE_NAME}>/data
 )
 
-target_include_directories(${EXECUTABLE_NAME} BEFORE PRIVATE 
+target_include_directories(${EXECUTABLE_NAME} BEFORE PRIVATE
     ${PROJECT_SOURCE_DIR}/include
     ${PROJECT_SOURCE_DIR}/src/imgui
 )
@@ -187,8 +199,7 @@ elseif(UNIX)
   find_package(OpenGL REQUIRED)
   find_package(X11 REQUIRED)
   find_library(MATH_LIBRARY m)
-  set(THREADS_PREFER_PTHREAD_FLAG ON)
-  find_package(Threads REQUIRED)
+  # Threads já foi resolvido no topo do arquivo (antes do Assimp).
   target_link_libraries(${EXECUTABLE_NAME}
     ${CMAKE_DL_LIBS}
     ${MATH_LIBRARY}
