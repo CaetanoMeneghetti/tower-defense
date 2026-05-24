@@ -60,6 +60,40 @@ void renderEnemy(GLuint shaderAnim,
                  unsigned int enemyTexture,
                  unsigned int defaultNormal);
 
+void renderKnight(GLuint shaderAnim,
+                  GameObject &knightModel,
+                  const Vector<3> &knightPos,
+                  float knightAngle,
+                  unsigned int knightTexture,
+                  unsigned int knightNormal);
+
+struct KnightWeaponTweaks {
+  float sword_tx    =  31.250f;
+  float sword_ty    =  -6.250f;
+  float sword_tz    = -37.500f;
+  float sword_rotX  =  -0.196f;
+  float sword_rotY  =  -0.589f;
+  float sword_rotZ  =   1.374f;
+  float sword_scale = 128.031f;
+
+  float shield_tx    =   3.750f;
+  float shield_ty    = -43.750f;
+  float shield_tz    =  -8.750f;
+  float shield_rotX  =   0.000f;
+  float shield_rotY  =   2.454f;
+  float shield_rotZ  =   0.000f;
+  float shield_scale = 180.000f;
+};
+
+void renderKnightWeapons(GLuint objShader,
+                         const ObjUniforms &u,
+                         GameObject &knightModel,
+                         Mesh &swordMesh,
+                         unsigned int swordTexture,
+                         Mesh &shieldMesh,
+                         unsigned int shieldTexture,
+                         const KnightWeaponTweaks &tweaks);
+
 void renderDefenders(GLuint shaderAnim,
                      std::vector<GameObject> &defenders,
                      unsigned int archerTex,

@@ -12,12 +12,14 @@
 #include <imgui_impl_opengl3.h>
 
 // ---- std ----
+#include <cmath>
 #include <ctime>
 #include <iostream>
 #include <memory>
 #include <vector>
 
 // ---- engine ----
+#include "engine/audio.h"
 #include "engine/animated_model.h"
 #include "engine/camera.h"
 #include "engine/catmull_rom.h"
@@ -48,6 +50,8 @@
 #include "game/troop_placement.h"
 #include "game/troop_selection.h"
 #include "game/upgrade_system.h"
+#include "game/knight_system.h"
+#include "game/wave_system.h"
 
 // ---- input ----
 #include "input/camera_controller.h"
@@ -197,11 +201,19 @@ struct SceneTextures {
   unsigned int arquebusNormal;
   unsigned int arquebusWeapon;
 
+  unsigned int knightColor;
+  unsigned int knightNormal;
+  unsigned int swordColor;
+  unsigned int shieldColor;
+
   unsigned int castleColor;
   unsigned int castleNormal;
 
   unsigned int treeLog;
   unsigned int treeLeaves;
+
+  unsigned int selectionCircle;
+  unsigned int armoredZombieColor;
 };
 
 SceneTextures loadAllSceneTextures() {
@@ -239,11 +251,20 @@ SceneTextures loadAllSceneTextures() {
   t.arquebusNormal     = loadTexture("data/textures/arquebus_normal.png");
   t.arquebusWeapon     = loadTexture("data/textures/arquebus_weapon.png");
 
+  t.swordColor  = loadTexture("data/textures/knightattachment.png");
+  t.shieldColor = loadTexture("data/textures/knightattachment.png");
+
+  t.knightColor  = loadTexture("data/textures/knight.png");
+  t.knightNormal = loadTexture("data/textures/knightnormal.png");
+
   t.castleColor        = loadTexture("data/textures/castle.png");
   t.castleNormal       = loadTexture("data/textures/castle_normal.png");
 
   t.treeLog            = loadTexture("data/textures/log.jpeg");
   t.treeLeaves         = loadTexture("data/textures/leaves.png", 4);
+
+  t.selectionCircle    = loadTexture("data/textures/selectioncircle.png", 4);
+  t.armoredZombieColor = loadTexture("data/textures/armorzombie.png", 4);
 
   return t;
 }
@@ -259,6 +280,8 @@ void deleteAllSceneTextures(const SceneTextures &t) {
       t.arquebusColor, t.arquebusNormal, t.arquebusWeapon,
       t.castleColor, t.castleNormal,
       t.treeLog, t.treeLeaves,
+      t.swordColor, t.shieldColor,
+      t.selectionCircle, t.armoredZombieColor,
   };
   for (unsigned int tex : all) {
     if (tex != 0) glDeleteTextures(1, &tex);
@@ -369,6 +392,7 @@ int run(GLFWwindow *window) {
   uiTextures.healthIcon    = loadTexture("data/textures/ui_health.png", 4);
   uiTextures.archerIcon    = loadTexture("data/textures/ui_archer.png", 4);
   uiTextures.arquebusIcon  = loadTexture("data/textures/ui_arquebus.png", 4);
+  uiTextures.zombiePortrait = loadTexture("data/textures/zombie.png", 4);
   gameHud.setTextures(uiTextures);
 
   // ---------------------------------------------------------------------------
@@ -384,8 +408,13 @@ int run(GLFWwindow *window) {
   // ---------------------------------------------------------------------------
   // Modelos animados + estáticos
   // ---------------------------------------------------------------------------
-  AnimatedModel enemyBase("data/models/zombie/zombie_t.glb");
-  enemyBase.loadAnimation("run", "data/models/zombie/zombie_run.glb");
+  AnimatedModel enemyBase("data/models/zombie/zombieT.glb");
+  enemyBase.loadAnimation("run",   "data/models/zombie/zombieRun.glb");
+  enemyBase.loadAnimation("death", "data/models/zombie/zombieDeath.glb");
+
+  AnimatedModel armoredZombieBase("data/models/armoredzombie/armoredzombie.glb");
+  armoredZombieBase.loadAnimation("run",   "data/models/armoredzombie/armoredzombieWalk.glb");
+  armoredZombieBase.loadAnimation("death", "data/models/armoredzombie/armoredzombieDeath.glb");
 
   // Arcabuz — 5 tiers (sistema de upgrade)
   AnimatedModel arquebusBase("data/models/arquebus/arquebus_t.glb");
@@ -399,6 +428,13 @@ int run(GLFWwindow *window) {
   AnimatedModel arquebusBaseLvl5("data/models/arquebus/arquebus_t5.glb");
   arquebusBaseLvl5.loadAnimation("idle1", "data/models/arquebus/arquebus_idle.glb");
 
+
+  for (AnimatedModel *m : {&arquebusBase, &arquebusBaseLvl2, &arquebusBaseLvl3,
+                            &arquebusBaseLvl4, &arquebusBaseLvl5}) {
+    m->loadAnimation("fire",   "data/models/arquebus/arquebusFire.glb");
+    m->loadAnimation("reload", "data/models/arquebus/arquebusReload.glb");
+  }
+  
   // Arqueiro — 5 tiers (sistema de upgrade)
   AnimatedModel archerBase("data/models/archer/archer_t.glb");
   archerBase.loadAnimation("idle1", "data/models/archer/idle1.glb");
@@ -420,11 +456,61 @@ int run(GLFWwindow *window) {
   archerBaseLvl5.loadAnimation("idle1", "data/models/archer/idle1.glb");
   archerBaseLvl5.loadAnimation("aim", "data/models/archer/aim_draw.glb");
 
+  AnimatedModel knightBase("data/models/knight/knightT.glb");
+  knightBase.loadAnimation("knightWalk",  "data/models/knight/knightIdle.glb");
+  knightBase.loadAnimation("knightSlash", "data/models/knight/knightAttack.glb");
+  knightBase.loadAnimation("knightDeath", "data/models/zombie/zombieDeath.glb");
+
+
   std::vector<Vertex> bowVertices;
   if (!loadObj("data/models/archer/bow.obj", bowVertices)) {
     std::cout << "ERRO: Nao encontrou data/models/archer/bow.obj" << std::endl;
   }
   Mesh bowMesh(bowVertices);
+
+  std::vector<Vertex> swordVertices;
+if (!loadObj("data/models/knight/sword.obj", swordVertices)) {
+  std::cout << "ERRO: Nao encontrou sword.obj" << std::endl;
+}
+Mesh swordMesh(swordVertices);
+
+std::vector<Vertex> shieldVertices;
+if (!loadObj("data/models/knight/shield.obj", shieldVertices)) {
+  std::cout << "ERRO: Nao encontrou shield.obj" << std::endl;
+}
+Mesh shieldMesh(shieldVertices);
+  // Quad plano XZ para o círculo de seleção (centrado na origem, escala via matrix)
+  std::vector<Vertex> circleQuadVerts = {
+      {{-1.0f, 0.0f, -1.0f}, {0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}},
+      {{ 1.0f, 0.0f, -1.0f}, {1.0f, 0.0f}, {0.0f, 1.0f, 0.0f}},
+      {{ 1.0f, 0.0f,  1.0f}, {1.0f, 1.0f}, {0.0f, 1.0f, 0.0f}},
+      {{-1.0f, 0.0f, -1.0f}, {0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}},
+      {{ 1.0f, 0.0f,  1.0f}, {1.0f, 1.0f}, {0.0f, 1.0f, 0.0f}},
+      {{-1.0f, 0.0f,  1.0f}, {0.0f, 1.0f}, {0.0f, 1.0f, 0.0f}},
+  };
+  Mesh selectionCircleMesh(circleQuadVerts);
+
+  // Circulo de range: 64 segmentos no plano XZ, raio=1 (escalar por range no draw)
+  GLuint rangeCircleVAO = 0, rangeCircleVBO = 0;
+  {
+    const int kSegs = 64;
+    std::vector<float> pts;
+    pts.reserve(kSegs * 3);
+    for (int i = 0; i < kSegs; ++i) {
+      float a = 2.0f * math_constants::kPi * i / kSegs;
+      pts.push_back(std::cos(a));
+      pts.push_back(0.05f);
+      pts.push_back(std::sin(a));
+    }
+    glGenVertexArrays(1, &rangeCircleVAO);
+    glGenBuffers(1, &rangeCircleVBO);
+    glBindVertexArray(rangeCircleVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, rangeCircleVBO);
+    glBufferData(GL_ARRAY_BUFFER, pts.size() * sizeof(float), pts.data(), GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)nullptr);
+    glEnableVertexAttribArray(0);
+    glBindVertexArray(0);
+  }
 
   std::vector<Vertex> arquebusVertices;
   if (!loadObj("data/models/arquebus/arquebus_weapon.obj", arquebusVertices)) {
@@ -500,6 +586,10 @@ int run(GLFWwindow *window) {
   enemyClass.type = 3;
   addTier(enemyClass, &enemyBase, tex.enemyColor, 0, nullptr, 0, glm::mat4(1.0f));
 
+  TroopDef armoredEnemyClass;
+  armoredEnemyClass.type = 3;
+  addTier(armoredEnemyClass, &armoredZombieBase, tex.armoredZombieColor, 0, nullptr, 0, glm::mat4(1.0f));
+
   TroopDef archerClass;
   archerClass.type = 1;
   for (AnimatedModel *m : {&archerBase, &archerBaseLvl2, &archerBaseLvl3,
@@ -516,21 +606,55 @@ int run(GLFWwindow *window) {
             &arquebusMesh, tex.arquebusWeapon, arqOffset);
   }
 
+  TroopDef knightClass;
+  knightClass.type = defender_types::kKnight;
+  addTier(knightClass, &knightBase, tex.knightColor, tex.knightNormal,
+  nullptr, 0, glm::mat4(1.0f));
+
   // ---------------------------------------------------------------------------
   // Estado de combate + iluminação
   // ---------------------------------------------------------------------------
-  GameObject enemyRunner(&enemyClass, Vector<3>{0.0f, 0.0f, 0.0f});
-  enemyRunner.setIdleAnimations({"run"});
+  constexpr int kMaxEnemies = 20;
 
-  EnemyInstance enemy = makeEnemy(kZombieStats);
+  // Dois pools de GameObjects — um por tipo de inimigo.
+  // Cada GO tem estado de animação independente; compartilham o AnimatedModel.
+  std::vector<GameObject> normalEnemyModels, armoredEnemyModels;
+  normalEnemyModels.reserve(kMaxEnemies);
+  armoredEnemyModels.reserve(kMaxEnemies);
+  for (int i = 0; i < kMaxEnemies; ++i) {
+    normalEnemyModels.emplace_back(&enemyClass, Vector<3>{0.f, 0.f, 0.f});
+    normalEnemyModels.back().setIdleAnimations({"run"});
+    armoredEnemyModels.emplace_back(&armoredEnemyClass, Vector<3>{0.f, 0.f, 0.f});
+    armoredEnemyModels.back().setIdleAnimations({"run"});
+  }
+
+  // Todos os slots começam mortos e controlados pela wave.
+  EnemyStats defaultStats = kZombieStats;
+  std::vector<EnemyInstance> enemies(kMaxEnemies);
+  for (auto &e : enemies) {
+    e = makeEnemy(defaultStats);
+    e.waveControlled = true;
+    e.alive          = false;
+  }
+
+  std::vector<EnemyTickResult> enemyTicks(kMaxEnemies);
+
   std::vector<GameObject> defenders;
   std::vector<DefenderShoot> defenderShoots;
 
-  // Pré-spawn de um arqueiro inicial (gameplay: o jogador começa com 1).
-  defenders.push_back(GameObject(&archerClass, Vector<3>{0.0f, 0.1f, 0.0f}));
-  defenders.back().setIdleAnimations({"idle1"});
+  GameObject knightModel(&knightClass, Vector<3>{0.0f, 0.0f, 0.0f});
+  knightModel.setIdleAnimations({"knightWalk"});
+  KnightInstance knight = makeKnight(curveCache);
+
+  KnightWeaponTweaks weaponTweaks;
 
   int selectedTroopIndex = -1;
+  float selectionAngle = 0.0f;
+  bool battleMusicStarted = false;
+
+  // Wave system — controla spawn
+  WaveState waveState = makeWaveState();
+
   DirectionalLight moonLight = makeMoonLight();
 
   Camera cam;
@@ -540,6 +664,19 @@ int run(GLFWwindow *window) {
   // ---------------------------------------------------------------------------
   // LOOP PRINCIPAL
   // ---------------------------------------------------------------------------
+  // Trilhas disponíveis para seleção aleatória
+  static const char* kBattleTracks[] = {
+    "data/audio/battle1.mp3", "data/audio/battle2.mp3", "data/audio/battle3.mp3"
+  };
+  static const char* kIntermissionTracks[] = {
+    "data/audio/intermission1.mp3", "data/audio/intermission2.mp3", "data/audio/intermission3.mp3"
+  };
+  static const char* kArcherShots[]   = {"data/audio/archerShot1.mp3",   "data/audio/archerShot2.mp3"};
+  static const char* kArquebusShots[] = {"data/audio/arquebusShot1.mp3", "data/audio/arquebusShot2.mp3"};
+
+  // Música de intermission começa imediatamente; posição preservada entre ondas
+  audio::startIntermissionMusic(kIntermissionTracks[std::rand() % 3]);
+
   using namespace game_constants;
   double lastTime = glfwGetTime();
   while (!glfwWindowShouldClose(window)) {
@@ -550,11 +687,78 @@ int run(GLFWwindow *window) {
     const float deltaTime = static_cast<float>(kFrameDelay);
     lastTime += kFrameDelay;
 
-    // ------- UPDATE: inimigo + defensores -------
-    EnemyTickResult enemyTick = updateEnemy(
-        enemy, enemyRunner, curvePoints, curveCache, state, deltaTime);
-    updateDefenders(defenders, defenderShoots, enemy, enemyTick.position, deltaTime);
+    selectionAngle += 0.5f * deltaTime;
+    if (selectionAngle >= math_constants::kTwoPi) selectionAngle -= math_constants::kTwoPi;
 
+    // ------- UPDATE: inimigos -------
+    int deathsThisFrame = 0;
+    for (auto &t : enemyTicks) { t.position = {0.f, -1000.f, 0.f}; t.diedThisFrame = false; }
+    for (int i = 0; i < kMaxEnemies; ++i) {
+      auto &e = enemies[i];
+      if (!e.alive && e.respawnTimer <= 0.0f) continue;
+      GameObject &model = (e.stats.type == enemy_types::kArmored)
+                          ? armoredEnemyModels[i] : normalEnemyModels[i];
+      enemyTicks[i] = updateEnemy(e, model, curvePoints, curveCache, state, deltaTime);
+      if (enemyTicks[i].diedThisFrame) ++deathsThisFrame;
+    }
+
+    // ------- UPDATE: wave system -------
+    bool allSlotsFull = true;
+    for (auto &e : enemies)
+      if (!e.alive && e.respawnTimer <= 0.0f) { allSlotsFull = false; break; }
+
+    WavePhase prevPhase = waveState.phase;
+    int spawnType = updateWave(waveState, window, deltaTime, deathsThisFrame, allSlotsFull);
+    if (spawnType >= 0) {
+      const WaveDef &waveDef = kWaves[waveState.currentWave];
+      const EnemyStats &stats = (spawnType == enemy_types::kArmored)
+                                ? waveDef.armoredStats : waveDef.enemyStats;
+      for (int i = 0; i < kMaxEnemies; ++i) {
+        if (!enemies[i].alive && enemies[i].respawnTimer <= 0.0f) {
+          enemies[i].stats        = stats;
+          enemies[i].hp           = stats.maxHp;
+          enemies[i].pathDistance = 0.0f;
+          enemies[i].alive        = true;
+          enemies[i].hitFlashTime = 0.0f;
+          enemies[i].respawnTimer = 0.0f;
+          GameObject &model = (spawnType == enemy_types::kArmored)
+                              ? armoredEnemyModels[i] : normalEnemyModels[i];
+          model.setAnimation("run");
+          break;
+        }
+      }
+    }
+
+    // --- Transições de fase: troca de música e efeitos ---
+    if (waveState.phase != prevPhase) {
+      if (waveState.phase == WavePhase::Starting) {
+        audio::pauseIntermissionMusic();
+        audio::playOneShotAt("data/audio/waveStart.mp3", 0.25f);
+      } else if (waveState.phase == WavePhase::Active) {
+        if (battleMusicStarted) {
+          audio::resumeBattleMusic();
+        } else {
+          audio::playMusic(kBattleTracks[std::rand() % 3]);
+          battleMusicStarted = true;
+        }
+      } else if (waveState.phase == WavePhase::Intermission) {
+        audio::pauseBattleMusic();
+        audio::resumeIntermissionMusic();
+      } else if (waveState.phase == WavePhase::Victory) {
+        audio::stopMusic();
+        audio::stopIntermissionMusic();
+      }
+    }
+
+    // ------- UPDATE: defensores -------
+    DefenderFireResult fireResult = updateDefenders(
+        defenders, defenderShoots, enemies, enemyTicks, deltaTime);
+    for (int n = 0; n < fireResult.archerFired;   ++n) audio::playOneShot(kArcherShots[std::rand() % 2]);
+    for (int n = 0; n < fireResult.arquebusFired; ++n) audio::playOneShot(kArquebusShots[std::rand() % 2]);
+
+    KnightTickResult knightTick = updateKnight(
+        knight, knightModel, enemies, enemyTicks, curvePoints, curveCache, deltaTime);
+    if (knightTick.hitThisFrame)  audio::playOneShot("data/audio/knightHit.mp3");
     // ------- INPUT por frame -------
     processInput(window, cameraPosition, deltaTime);
 
@@ -580,13 +784,32 @@ int run(GLFWwindow *window) {
     // ------- RENDER: entidades animadas (inimigo + defensores) -------
     uploadCommonUniforms(pipe.animShader, moonLight, lanternLights, glmViewPos, glView, glProj);
     glUniform1f(glGetUniformLocation(pipe.animShader, "hitFlash"), 0.0f);
-    renderEnemy(pipe.animShader, enemy, enemyRunner, enemyTick.position, enemyTick.angle,
-                tex.enemyColor, tex.defaultNormal);
+    for (int i = 0; i < kMaxEnemies; ++i) {
+      auto &e = enemies[i];
+      if (!e.alive && e.respawnTimer <= 0.0f) continue;
+      bool isArmored = (e.stats.type == enemy_types::kArmored);
+      GameObject &model = isArmored ? armoredEnemyModels[i] : normalEnemyModels[i];
+      unsigned int eTex = isArmored ? tex.armoredZombieColor : tex.enemyColor;
+      renderEnemy(pipe.animShader, e, model, enemyTicks[i].position, enemyTicks[i].angle,
+                  eTex, tex.defaultNormal);
+    }
+
+      if (knight.alive || knight.dying) {
+      renderKnight(pipe.animShader, knightModel, knightTick.position,
+                   knightTick.angle, tex.knightColor, tex.knightNormal);
+    }
+
     renderDefenders(pipe.animShader, defenders, tex.archerColor, tex.archerNormal);
 
     // ------- RENDER: armas dos defensores + castelo -------
     uploadCommonUniforms(pipe.objShader, moonLight, lanternLights, glmViewPos, glView, glProj);
     renderDefenderWeapons(pipe.objShader, pipe.objU, defenders, bowMesh, tex.bowColor);
+    if (knight.alive || knight.dying) {
+      renderKnightWeapons(pipe.objShader, pipe.objU, knightModel,
+                          swordMesh, tex.swordColor,
+                          shieldMesh, tex.shieldColor,
+                          weaponTweaks);
+    }
     renderCastle(pipe.objShader, pipe.objU, castleMesh, tex.castleColor, tex.castleNormal,
                  curvePoints);
 
@@ -599,6 +822,51 @@ int run(GLFWwindow *window) {
     renderTrees(pipe.objShader, pipe.objU, trees,
                 treeLogMesh.get(), tex.treeLog,
                 treeLeavesMesh.get(), tex.treeLeaves);
+
+    // ------- RENDER: círculo de range (azul) -------
+    if (selectedTroopIndex >= 0 && selectedTroopIndex < static_cast<int>(defenders.size())) {
+      const GameObject &sel = defenders[selectedTroopIndex];
+      float r = sel.range;
+      auto glRangeModel = toOpenGLMatrix(
+          translate<4,4>(sel.position[0], 0.0f, sel.position[2]) * scale<4,4>(r, 1.0f, r));
+
+      glEnable(GL_BLEND);
+      glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+      glLineWidth(2.0f);
+      glUseProgram(pipe.lineShader);
+      glUniformMatrix4fv(pipe.lineU.view,       1, GL_FALSE, glView.data());
+      glUniformMatrix4fv(pipe.lineU.projection, 1, GL_FALSE, glProj.data());
+      glUniformMatrix4fv(pipe.lineU.model,      1, GL_FALSE, glRangeModel.data());
+      glUniform4f(pipe.lineU.color, 0.25f, 0.55f, 1.0f, 0.85f);
+      glBindVertexArray(rangeCircleVAO);
+      glDrawArrays(GL_LINE_LOOP, 0, 64);
+      glBindVertexArray(0);
+      glLineWidth(1.0f);
+      glDisable(GL_BLEND);
+    }
+
+    // ------- RENDER: círculo de seleção -------
+    if (selectedTroopIndex >= 0 && selectedTroopIndex < static_cast<int>(defenders.size())) {
+      const GameObject &sel = defenders[selectedTroopIndex];
+      const float px = sel.position[0], pz = sel.position[2];
+      Matrix<4,4> mT = translate<4,4>(px, 0.01f, pz);
+      Matrix<4,4> mR = rotateY<4,4>(selectionAngle);
+      Matrix<4,4> mS = scale<4,4>(0.8f, 1.0f, 0.8f);
+      auto glCircleModel = toOpenGLMatrix(mT * mR * mS);
+
+      glEnable(GL_BLEND);
+      glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+      glDepthMask(GL_FALSE);
+
+      glUseProgram(pipe.objShader);
+      glUniformMatrix4fv(pipe.objU.model, 1, GL_FALSE, glCircleModel.data());
+      glActiveTexture(GL_TEXTURE0);
+      glBindTexture(GL_TEXTURE_2D, tex.selectionCircle);
+      selectionCircleMesh.draw();
+
+      glDepthMask(GL_TRUE);
+      glDisable(GL_BLEND);
+    }
 
     // ------- RENDER: lanternas -------
     if (lanternMesh) {
@@ -646,12 +914,89 @@ int run(GLFWwindow *window) {
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
 
-    gameHud.render(state, currentFps);
+    gameHud.render(state, waveState, currentFps);
+
 
     if (selectedTroopIndex >= 0 && selectedTroopIndex < static_cast<int>(defenders.size())) {
       GameObject &troop = defenders[selectedTroopIndex];
       if (drawTroopDetailsHud(troop, state, uiTextures.archerIcon)) {
         troop.upgrade();
+        audio::playOneShot("data/audio/selectionsound.mp3");
+      }
+    }
+
+    // ------- TOOLTIPS de unidades -------
+    {
+      ImGuiIO &io = ImGui::GetIO();
+      if (!io.WantCaptureMouse) {
+        ImVec2 mouse = ImGui::GetMousePos();
+
+        // Projeta um ponto 3D → pixel de tela (column-major, igual ao shader).
+        auto worldToScreen = [&](float wx, float wy, float wz) -> std::pair<ImVec2, bool> {
+          float vx = glView[0]*wx + glView[4]*wy + glView[8] *wz + glView[12];
+          float vy = glView[1]*wx + glView[5]*wy + glView[9] *wz + glView[13];
+          float vz = glView[2]*wx + glView[6]*wy + glView[10]*wz + glView[14];
+          float vw = glView[3]*wx + glView[7]*wy + glView[11]*wz + glView[15];
+          float cx = glProj[0]*vx + glProj[4]*vy + glProj[8] *vz + glProj[12]*vw;
+          float cy = glProj[1]*vx + glProj[5]*vy + glProj[9] *vz + glProj[13]*vw;
+          float cw = glProj[3]*vx + glProj[7]*vy + glProj[11]*vz + glProj[15]*vw;
+          if (cw <= 0.0f) return {{0.f, 0.f}, false};
+          float sx = ( cx / cw + 1.0f) * 0.5f * static_cast<float>(state.fbWidth);
+          float sy = (-cy / cw + 1.0f) * 0.5f * static_cast<float>(state.fbHeight);
+          return {{sx, sy}, true};
+        };
+
+        // Projeta pés (Y=0) e cabeça (Y=kH) e verifica se o mouse está dentro
+        // do retângulo de tela com padding horizontal kPad.
+        const float kH   = 1.7f;   // altura aproximada do personagem em unidades do mundo
+        const float kPad = 25.0f;  // padding horizontal em pixels
+        auto overModel = [&](float wx, float wz) -> bool {
+          auto [sFoot, okF] = worldToScreen(wx, 0.0f, wz);
+          auto [sHead, okH] = worldToScreen(wx, kH,   wz);
+          if (!okF || !okH) return false;
+          float left  = std::min(sFoot.x, sHead.x) - kPad;
+          float right = std::max(sFoot.x, sHead.x) + kPad;
+          float top   = std::min(sFoot.y, sHead.y);
+          float bot   = std::max(sFoot.y, sHead.y);
+          return mouse.x >= left && mouse.x <= right
+              && mouse.y >= top  && mouse.y <= bot;
+        };
+
+        bool showed = false;
+
+        // Defensores colocados no mapa (arqueiro / arcabuzeiro)
+        for (const auto &def : defenders) {
+          if (!overModel(def.position[0], def.position[2])) continue;
+          const char *nome = (def.type == defender_types::kArcher) ? "Arqueiro" : "Arcabuzeiro";
+          ImGui::BeginTooltip();
+          ImGui::Text("%s (N\xc3\xadvel %d)", nome, def.level);
+          ImGui::EndTooltip();
+          showed = true;
+          break;
+        }
+
+        // Cavaleiro (entidade separada dos defensores)
+        if (!showed && (knight.alive || knight.dying)
+            && overModel(knightTick.position[0], knightTick.position[2])) {
+          ImGui::BeginTooltip();
+          ImGui::Text("Cavaleiro");
+          ImGui::Separator();
+          ImGui::Text("Vida: %d / %d", knight.hp, knight.maxHp);
+          ImGui::EndTooltip();
+          showed = true;
+        }
+
+        // Inimigos
+        for (int i = 0; i < kMaxEnemies && !showed; ++i) {
+          if (!enemies[i].alive) continue;
+          if (!overModel(enemyTicks[i].position[0], enemyTicks[i].position[2])) continue;
+          const char *nome = (enemies[i].stats.type == enemy_types::kArmored)
+                             ? "Zumbi Blindado" : "Zumbi";
+          ImGui::BeginTooltip();
+          ImGui::Text("%s  %d/%d", nome, enemies[i].hp, enemies[i].stats.maxHp);
+          ImGui::EndTooltip();
+          showed = true;
+        }
       }
     }
 
@@ -672,6 +1017,9 @@ int run(GLFWwindow *window) {
   glDeleteTextures(1, &uiTextures.healthIcon);
   glDeleteTextures(1, &uiTextures.archerIcon);
   glDeleteTextures(1, &uiTextures.arquebusIcon);
+  glDeleteTextures(1, &uiTextures.zombiePortrait);
+  glDeleteVertexArrays(1, &rangeCircleVAO);
+  glDeleteBuffers(1, &rangeCircleVBO);
   deleteGpuMesh(grassMesh);
   deleteGpuMesh(curveMesh);
   deleteGpuMesh(skyMesh);
@@ -706,9 +1054,9 @@ int main() {
     glfwTerminate();
     return 1;
   }
-
+  audio::init();
   const int exitCode = run(window);
-
+  audio::shutdown();
   glfwDestroyWindow(window);
   glfwTerminate();
   return exitCode;

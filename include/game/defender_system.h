@@ -9,26 +9,29 @@
 // =============================================================================
 // DEFENSORES — ESTADO DE TIRO + UPDATE
 // =============================================================================
-// Defenders compartilham a entidade visual (GameObject). O estado de tiro vive
-// em vetor paralelo para manter os GameObjects independentes da lógica de
-// combate.
 
 struct DefenderShoot {
-  float shootTimer;
-  bool aiming;
+  float shootTimer = 0.0f;
+  bool  aiming     = false;   // arqueiro: em animação de mira/disparo
+  bool  reloading  = false;   // arcabuz: fase de reload após disparo
 };
 
-// Tipos de defensor. Espelha GameObject::type. kNone (0) = nenhum selecionado.
 namespace defender_types {
-constexpr int kNone = 0;
-constexpr int kArcher = 1;
+constexpr int kNone    = 0;
+constexpr int kArcher  = 1;
 constexpr int kArquebus = 2;
+constexpr int kKnight  = 3;
 }  // namespace defender_types
 
-// Atualiza animações, mira e dano sobre o inimigo. Mantém defenderShoots
-// alinhado com defenders se um foi recém adicionado.
-void updateDefenders(std::vector<GameObject> &defenders,
-                     std::vector<DefenderShoot> &defenderShoots,
-                     EnemyInstance &enemy,
-                     const Vector<3> &enemyPos,
-                     float deltaTime);
+struct DefenderFireResult {
+  int archerFired   = 0;  // quantos arqueiros dispararam neste frame
+  int arquebusFired = 0;  // quantos arcabuzes dispararam neste frame
+};
+
+// enemies     = todos os slots de inimigos (vivos e mortos)
+// enemyTicks  = posições calculadas no frame atual (alinhado com enemies)
+DefenderFireResult updateDefenders(std::vector<GameObject> &defenders,
+                                   std::vector<DefenderShoot> &defenderShoots,
+                                   std::vector<EnemyInstance> &enemies,
+                                   const std::vector<EnemyTickResult> &enemyTicks,
+                                   float deltaTime);

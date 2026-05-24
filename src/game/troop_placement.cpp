@@ -5,8 +5,8 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <imgui.h>
 
+#include "game/collisions.h"
 #include "game/game_constants.h"
-#include "game/path_navigation.h"
 #include "input/camera_controller.h"
 
 void handleTroopPlacement(const TroopPlacementContext &ctx, AppState &state, float deltaTime) {
@@ -25,13 +25,11 @@ void handleTroopPlacement(const TroopPlacementContext &ctx, AppState &state, flo
   Vector<3> groundPos = getMouseGroundPosition(
       ctx.window, ctx.cam, ctx.cameraPosition, state.fbWidth, state.fbHeight);
 
-  // 2. Distância exata do mouse até a linha central do caminho
-  float distToPath = distanceToPath(ctx.curvePoints, groundPos[0], groundPos[2]);
-
-  // 3. Validações: em cima do path? muito longe?
-  bool isOnPath = (distToPath < (kPathHalfWidth + kTroopPathClearance));
-  bool isTooFar = (distToPath > kTroopMaxDistanceFromPath);
-  bool isInvalidPlacement = isOnPath || isTooFar;
+  // 2 + 3. Validação de posicionamento (via colisões centralizadas)
+  auto placement = collisions::checkPlacement(
+      ctx.curvePoints, groundPos[0], groundPos[2],
+      kPathHalfWidth, kTroopPathClearance, kTroopMaxDistanceFromPath);
+  bool isInvalidPlacement = placement.invalid();
 
   // 4. Cor do holograma
   glm::vec4 hColor =

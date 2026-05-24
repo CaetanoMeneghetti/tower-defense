@@ -68,10 +68,7 @@ void renderEnemy(GLuint shaderAnim,
                  float enemyAngle,
                  unsigned int enemyTexture,
                  unsigned int defaultNormal) {
-  if (!enemy.alive) {
-    glUniform1f(glGetUniformLocation(shaderAnim, "hitFlash"), 0.0f);
-    return;
-  }
+  
 
   bindColorAndNormal(shaderAnim, enemyTexture, defaultNormal);
 
@@ -86,6 +83,112 @@ void renderEnemy(GLuint shaderAnim,
 
   // Reseta pra nao vazar flash para os defensores no mesmo shader.
   glUniform1f(glGetUniformLocation(shaderAnim, "hitFlash"), 0.0f);
+}
+
+
+// =============================================================================
+// KNIGHT
+// =============================================================================
+
+void renderKnight(GLuint shaderAnim,
+                  GameObject &knightModel,
+                  const Vector<3> &knightPos,
+                  float knightAngle,
+                  unsigned int knightTexture,
+                  unsigned int knightNormal) {
+  bindColorAndNormal(shaderAnim, knightTexture, knightNormal);
+
+  knightModel.position = knightPos;
+  knightModel.rotationY = knightAngle;
+
+  glUniform1f(glGetUniformLocation(shaderAnim, "hitFlash"), 0.0f);
+  knightModel.draw(shaderAnim);
+}
+
+// Matriz de escala uniforme (coluna-major, formato glm).
+static glm::mat4 weaponScaleMat(float s) {
+  glm::mat4 m(0.0f);
+  m[0][0] = s; m[1][1] = s; m[2][2] = s; m[3][3] = 1.0f;
+  return m;
+}
+
+// Matriz de translação 
+// Ajuste tx/ty/tz em unidades do bone (100 unidades ≈ 1 unidade no mundo).
+static glm::mat4 weaponTranslateMat(float tx, float ty, float tz) {
+  glm::mat4 m(0.0f);
+  m[0][0] = 1.0f; m[1][1] = 1.0f; m[2][2] = 1.0f; m[3][3] = 1.0f;
+  m[3][0] = tx;   m[3][1] = ty;   m[3][2] = tz;
+  return m;
+}
+
+// Rotação em torno do eixo X 
+static glm::mat4 weaponRotateXMat(float rad) {
+  float c = std::cos(rad), s = std::sin(rad);
+  glm::mat4 m(0.0f);
+  m[0][0] = 1.0f;
+  m[1][1] =  c;  m[1][2] = s;
+  m[2][1] = -s;  m[2][2] = c;
+  m[3][3] = 1.0f;
+  return m;
+}
+
+// Rotação em torno do eixo Y 
+static glm::mat4 weaponRotateYMat(float rad) {
+  float c = std::cos(rad), s = std::sin(rad);
+  glm::mat4 m(0.0f);
+  m[0][0] =  c;  m[0][2] = -s;
+  m[1][1] = 1.0f;
+  m[2][0] =  s;  m[2][2] =  c;
+  m[3][3] = 1.0f;
+  return m;
+}
+
+// Rotação em torno do eixo Z 
+static glm::mat4 weaponRotateZMat(float rad) {
+  float c = std::cos(rad), s = std::sin(rad);
+  glm::mat4 m(0.0f);
+  m[0][0] =  c;  m[0][1] = s;
+  m[1][0] = -s;  m[1][1] = c;
+  m[2][2] = 1.0f;
+  m[3][3] = 1.0f;
+  return m;
+}
+
+void renderKnightWeapons(GLuint objShader,
+                         const ObjUniforms &u,
+                         GameObject &knightModel,
+                         Mesh &swordMesh,
+                         unsigned int swordTexture,
+                         Mesh &shieldMesh,
+                         unsigned int shieldTexture,
+                         const KnightWeaponTweaks &t) {
+  // --- ESPADA (mão direita) ---
+  glm::mat4 swordOffset = weaponTranslateMat(t.sword_tx, t.sword_ty, t.sword_tz)
+                        * weaponRotateXMat(t.sword_rotX)
+                        * weaponRotateYMat(t.sword_rotY)
+                        * weaponRotateZMat(t.sword_rotZ)
+                        * weaponScaleMat(t.sword_scale);
+
+  glm::mat4 rightHand = knightModel.getBoneWorldTransform("mixamorig:RightHand");
+  glUniformMatrix4fv(u.model, 1, GL_FALSE, glm::value_ptr(rightHand * swordOffset));
+  glActiveTexture(GL_TEXTURE0);
+  glBindTexture(GL_TEXTURE_2D, swordTexture);
+  glUniform1i(glGetUniformLocation(objShader, "tex"), 0);
+  swordMesh.draw();
+
+  // --- ESCUDO (mão esquerda) ---
+  glm::mat4 shieldOffset = weaponTranslateMat(t.shield_tx, t.shield_ty, t.shield_tz)
+                         * weaponRotateXMat(t.shield_rotX)
+                         * weaponRotateYMat(t.shield_rotY)
+                         * weaponRotateZMat(t.shield_rotZ)
+                         * weaponScaleMat(t.shield_scale);
+
+  glm::mat4 leftHand = knightModel.getBoneWorldTransform("mixamorig:LeftHand");
+  glUniformMatrix4fv(u.model, 1, GL_FALSE, glm::value_ptr(leftHand * shieldOffset));
+  glActiveTexture(GL_TEXTURE0);
+  glBindTexture(GL_TEXTURE_2D, shieldTexture);
+  glUniform1i(glGetUniformLocation(objShader, "tex"), 0);
+  shieldMesh.draw();
 }
 
 // =============================================================================
@@ -327,9 +430,12 @@ void renderCurveOverlay(GLuint lineShader,
                         const GpuMesh &curveMesh,
                         const std::array<float, 16> &glView,
                         const std::array<float, 16> &glProj) {
+  static const float kIdentity[16] = {1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1};
   glUseProgram(lineShader);
-  glUniformMatrix4fv(u.view, 1, GL_FALSE, glView.data());
+  glUniformMatrix4fv(u.view,       1, GL_FALSE, glView.data());
   glUniformMatrix4fv(u.projection, 1, GL_FALSE, glProj.data());
+  glUniformMatrix4fv(u.model,      1, GL_FALSE, kIdentity);
+  glUniform4f(u.color, 1.0f, 1.0f, 0.0f, 1.0f);  // yellow
   glBindVertexArray(curveMesh.vao);
   glDrawArrays(GL_LINE_STRIP, 0, curveMesh.vertexCount);
 }

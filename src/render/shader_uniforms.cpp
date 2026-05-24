@@ -37,6 +37,8 @@ LineUniforms makeLineUniforms(GLuint program) {
   return LineUniforms{
       glGetUniformLocation(program, "view"),
       glGetUniformLocation(program, "projection"),
+      glGetUniformLocation(program, "model"),
+      glGetUniformLocation(program, "lineColor"),
   };
 }
 

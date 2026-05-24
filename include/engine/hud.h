@@ -3,9 +3,10 @@
 #include <GLFW/glfw3.h>
 
 #include "game/app_state.h"
+#include "game/wave_system.h"
 
 // =============================================================================
-// HUD (ImGui) — barra superior + janela de debug
+// HUD (ImGui) — barra superior + overlay de wave + debug
 // =============================================================================
 
 struct HudTextures {
@@ -14,6 +15,7 @@ struct HudTextures {
   unsigned int healthIcon;
   unsigned int archerIcon;
   unsigned int arquebusIcon;
+  unsigned int zombiePortrait;  // exibido no overlay de intermission
 };
 
 class Hud {
@@ -23,10 +25,19 @@ class Hud {
 
   void init(GLFWwindow *window);
   void setTextures(const HudTextures &textures);
-  void render(AppState &state, float fps);
+
+  // state é lido/escrito (gold, placement). ws e fps são somente leitura.
+  void render(AppState &state, const WaveState &ws, float fps);
+
   void shutdown();
 
  private:
   void setupStyle();
+  void renderTopBar(AppState &state, const WaveState &ws);
+  void renderWaveBar(const AppState &state, const WaveState &ws);
+  void renderIntermissionOverlay(const WaveState &ws);
+  void renderVictoryOverlay();
+  void renderDebugWindow(const AppState &state, float fps);
+
   HudTextures textures_;
 };

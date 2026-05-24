@@ -7,8 +7,7 @@
 // =============================================================================
 // CONSTANTES DE GAMEPLAY
 // =============================================================================
-// Ajustes de jogabilidade (custos, ranges, tempos). Centralizadas aqui para
-// facilitar balanceamento sem caçar valores no meio do código.
+
 namespace game_constants {
 
 // ---- Câmera ----
@@ -43,16 +42,28 @@ constexpr float kLanternLightHeight = 0.9f;
 inline const glm::vec3 kLanternLightColor = glm::vec3(1.8f, 1.05f, 0.40f);
 
 // ---- Combate ----
+//Arqueiro
 constexpr float kEnemyRespawnDelay = 2.0f;
 constexpr float kEnemyHitFlashDuration = 0.15f;
 constexpr float kArcherRange = 10.0f;
 constexpr float kArcherShootInterval = 1.0f;
 constexpr int kArcherArrowDamage = 10;
 
+//Arcabuz
+constexpr float kArquebusRange          = 10.0f;
+constexpr float kArquebusFireDuration   = 0.7f;   // duração da animação de disparo
+constexpr float kArquebusReloadDuration = 1.4f;   // duração da animação de reload
+constexpr int   kArquebusBulletDamage   = 20;
 // ---- Custos de tropas ----
 constexpr int kArcherCost = 50;
 constexpr int kArquebusCost = 75;
 
+// --- Espadachim
+constexpr int   kKnightMaxHp = 80;
+constexpr float kKnightSpeed = 1.5f;
+constexpr int   kKnightSlashDamage = 10;
+constexpr float kKnightSlashInterval = 0.8f;
+constexpr float kKnightCollisionRadius = 1.2f;
 // ---- Posicionamento de tropas ----
 // Folga adicional sobre o path para o overlay vermelho de inválido.
 constexpr float kTroopPathClearance = 0.5f;

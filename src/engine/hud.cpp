@@ -1,11 +1,25 @@
 #include "engine/hud.h"
 
+#include <cstdio>
+
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
 
+#include "engine/audio.h"
 #include "game/game_constants.h"
+#include "game/wave_system.h"
 
+// ---------------------------------------------------------------------------
+// Helpers de cor
+// ---------------------------------------------------------------------------
+static const ImVec4 kColorGold  = ImVec4(1.00f, 0.85f, 0.20f, 1.0f);
+static const ImVec4 kColorRed   = ImVec4(1.00f, 0.28f, 0.28f, 1.0f);
+static const ImVec4 kColorCream = ImVec4(0.92f, 0.88f, 0.78f, 1.0f);
+static const ImVec4 kColorMuted = ImVec4(0.65f, 0.60f, 0.50f, 1.0f);
+static const ImVec4 kColorGreen = ImVec4(0.40f, 0.90f, 0.40f, 1.0f);
+
+// ---------------------------------------------------------------------------
 Hud::Hud() {}
 Hud::~Hud() {}
 
@@ -26,155 +40,408 @@ void Hud::setTextures(const HudTextures &textures) {
 }
 
 void Hud::setupStyle() {
-  ImGuiStyle &style = ImGui::GetStyle();
-  style.Colors[ImGuiCol_WindowBg]      = ImVec4(0.12f, 0.08f, 0.05f, 0.95f);
-  style.Colors[ImGuiCol_Border]        = ImVec4(0.40f, 0.25f, 0.15f, 1.00f);
-  style.Colors[ImGuiCol_Text]          = ImVec4(0.90f, 0.85f, 0.75f, 1.00f);
-  style.Colors[ImGuiCol_TitleBg]       = ImVec4(0.15f, 0.08f, 0.04f, 1.00f);
-  style.Colors[ImGuiCol_TitleBgActive] = ImVec4(0.25f, 0.12f, 0.05f, 1.00f);
+  ImGuiStyle &s = ImGui::GetStyle();
 
-  style.WindowRounding = 0.0f;
-  style.WindowBorderSize = 2.0f;
+  s.Colors[ImGuiCol_WindowBg]        = ImVec4(0.08f, 0.05f, 0.03f, 0.92f);
+  s.Colors[ImGuiCol_Border]          = ImVec4(0.45f, 0.30f, 0.10f, 1.00f);
+  s.Colors[ImGuiCol_Text]            = kColorCream;
+  s.Colors[ImGuiCol_TextDisabled]    = kColorMuted;
+  s.Colors[ImGuiCol_TitleBg]         = ImVec4(0.10f, 0.06f, 0.02f, 1.00f);
+  s.Colors[ImGuiCol_TitleBgActive]   = ImVec4(0.18f, 0.10f, 0.03f, 1.00f);
+  s.Colors[ImGuiCol_Button]          = ImVec4(0.25f, 0.15f, 0.05f, 0.90f);
+  s.Colors[ImGuiCol_ButtonHovered]   = ImVec4(0.40f, 0.25f, 0.08f, 1.00f);
+  s.Colors[ImGuiCol_ButtonActive]    = ImVec4(0.55f, 0.35f, 0.10f, 1.00f);
+  s.Colors[ImGuiCol_Separator]       = ImVec4(0.40f, 0.28f, 0.10f, 0.80f);
+  s.Colors[ImGuiCol_FrameBg]         = ImVec4(0.12f, 0.08f, 0.03f, 0.80f);
+  s.Colors[ImGuiCol_PopupBg]         = ImVec4(0.10f, 0.07f, 0.03f, 0.97f);
+
+  s.WindowRounding   = 4.0f;
+  s.FrameRounding    = 3.0f;
+  s.PopupRounding    = 4.0f;
+  s.WindowBorderSize = 1.5f;
+  s.FrameBorderSize  = 0.0f;
+  s.ItemSpacing      = ImVec2(8.0f, 5.0f);
+  s.WindowPadding    = ImVec2(10.0f, 8.0f);
 }
 
-void Hud::render(AppState &state, float fps) {
+// ---------------------------------------------------------------------------
+// Barra superior
+// ---------------------------------------------------------------------------
+void Hud::renderTopBar(AppState &state, const WaveState &ws) {
   using game_constants::kArcherCost;
   using game_constants::kArquebusCost;
 
-  // Nota: ImGui::NewFrame() e ImGui::Render() agora são chamados pelo main,
-  // para permitir empilhar a HUD de upgrade entre eles
-  // (ver game/upgrade_system.h).
+  const float barH = 80.0f;
+  ImGuiWindowFlags flags =
+      ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings |
+      ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollWithMouse;
 
-  ImGuiWindowFlags topFlags =
-      ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoMove;
-
-  float topBarHeight = 90.0f;  // Espaço para caber as molduras
-  ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f), ImGuiCond_Always);
-  ImGui::SetNextWindowSize(ImVec2((float)state.fbWidth, topBarHeight), ImGuiCond_Always);
-
+  ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always);
+  ImGui::SetNextWindowSize(ImVec2((float)state.fbWidth, barH), ImGuiCond_Always);
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
   ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0, 0, 0, 0));
 
-  if (ImGui::Begin("TopBar", nullptr, topFlags)) {
-    ImDrawList *drawList = ImGui::GetWindowDrawList();
-    ImVec2 p0 = ImGui::GetWindowPos();
-    ImVec2 pMax = ImVec2(p0.x + state.fbWidth, p0.y + topBarHeight);
+  if (ImGui::Begin("TopBar", nullptr, flags)) {
+    ImDrawList *dl = ImGui::GetWindowDrawList();
+    ImVec2 p0(0, 0), p1((float)state.fbWidth, barH);
 
-    // Mapa de fundo
-    drawList->AddImage((void *)(intptr_t)textures_.topBackground, p0, pMax);
+    dl->AddImage((void *)(intptr_t)textures_.topBackground, p0, p1);
+    dl->AddLine(ImVec2(0, barH - 1), ImVec2((float)state.fbWidth, barH - 1),
+                IM_COL32(160, 110, 30, 200), 2.0f);
 
-    // Overlay de borda
-    drawList->AddRect(p0, pMax, IM_COL32(60, 40, 20, 200), 0.0f, 0, 4.0f);
+    // ---- Status: vida + ouro ----
+    const float sx = 12.0f, sy = 8.0f;
+    dl->AddRectFilled(ImVec2(sx, sy), ImVec2(sx + 170, barH - sy),
+                      IM_COL32(0, 0, 0, 155), 6.0f);
 
-    // -----------------------------------------------------------------------
-    // Área de status (vida + ouro) com fundo de contraste
-    // -----------------------------------------------------------------------
-    ImVec2 statusAreaPos = ImVec2(p0.x + 10, p0.y + 10);
-    ImVec2 statusAreaSize = ImVec2(220, topBarHeight - 20);
-
-    drawList->AddRectFilled(
-        statusAreaPos,
-        ImVec2(statusAreaPos.x + statusAreaSize.x, statusAreaPos.y + statusAreaSize.y),
-        IM_COL32(0, 0, 0, 150),
-        10.0f);  // 10.0f = arredondamento
-
-    ImGui::SetCursorPos(ImVec2(25.0f, 20.0f));
-    ImGui::Image((void *)(intptr_t)textures_.healthIcon, ImVec2(24, 24));
+    ImGui::SetCursorPos(ImVec2(sx + 8, 14.0f));
+    ImGui::Image((void *)(intptr_t)textures_.healthIcon, ImVec2(20, 20));
     ImGui::SameLine();
-    ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 4.0f);
-    ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "%d", state.health);
+    ImGui::SetCursorPosY(16.0f);
+    ImGui::TextColored(kColorRed, "%d HP", state.health);
 
-    ImGui::SetCursorPos(ImVec2(25.0f, 50.0f));
-    ImGui::Image((void *)(intptr_t)textures_.goldIcon, ImVec2(24, 24));
+    ImGui::SetCursorPos(ImVec2(sx + 8, 44.0f));
+    ImGui::Image((void *)(intptr_t)textures_.goldIcon, ImVec2(20, 20));
     ImGui::SameLine();
-    ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 4.0f);
-    ImGui::TextColored(ImVec4(1.0f, 0.9f, 0.1f, 1.0f), "%d GP", state.gold);
+    ImGui::SetCursorPosY(46.0f);
+    ImGui::TextColored(kColorGold, "%d GP", state.gold);
 
-    // -----------------------------------------------------------------------
-    // Seletor de torres (3 slots)
-    // -----------------------------------------------------------------------
-    const float itemWidth = 80.0f;
-    const float totalWidth = itemWidth * 3;
-    const float startX = (state.fbWidth / 2.0f) - (totalWidth / 2.0f);
+    // ---- Slots de tropas ----
+    const float slotW = 72.0f;
+    float slotStartX = (state.fbWidth / 2.0f) - slotW;  // 2 slots centrados
 
-    for (int i = 0; i < 3; i++) {
-      float slotX = startX + (i * itemWidth);
+    struct SlotDef { const char *id; unsigned int tex; int cost; int type; };
+    const SlotDef slots[2] = {
+      { "btn_archer",   textures_.archerIcon,  kArcherCost,  1 },
+      { "btn_arquebus", textures_.arquebusIcon, kArquebusCost, 2 },
+    };
 
-      // Moldura do slot
-      drawList->AddRectFilled(ImVec2(slotX + 5, p0.y + 10),
-                              ImVec2(slotX + itemWidth - 5, p0.y + topBarHeight - 10),
-                              IM_COL32(40, 30, 20, 180), 5.0f);
+    for (int i = 0; i < 2; i++) {
+      float bx = slotStartX + i * slotW;
+      bool selected  = state.isPlacingTroop && state.selectedTroopType == slots[i].type;
+      bool canAfford = state.gold >= slots[i].cost;
 
-      // Separador vertical entre slots
-      if (i < 2) {
-        drawList->AddLine(ImVec2(slotX + itemWidth, p0.y + 15),
-                          ImVec2(slotX + itemWidth, p0.y + topBarHeight - 15),
-                          IM_COL32(100, 80, 50, 255), 2.0f);
-      }
+      dl->AddRectFilled(ImVec2(bx + 4, 8), ImVec2(bx + slotW - 4, barH - 8),
+                        IM_COL32(30, 20, 8, 180), 5.0f);
+      if (selected)
+        dl->AddRect(ImVec2(bx + 4, 8), ImVec2(bx + slotW - 4, barH - 8),
+                    IM_COL32(220, 170, 30, 255), 5.0f, 0, 2.0f);
 
-      // Arqueiro (slot 0)
-      if (i == 0) {
-        ImGui::SetCursorPos(
-            ImVec2(slotX + (itemWidth - 60.0f) / 2.0f, (topBarHeight - 60.0f) / 2.0f));
-        if (ImGui::ImageButton(
-                "btn_archer", (void *)(intptr_t)textures_.archerIcon, ImVec2(50, 50))) {
-          if (state.gold >= kArcherCost) {
-            state.isPlacingTroop = true;
-            state.selectedTroopType = 1;  // 1 = Arqueiro
-          }
+      ImGui::SetCursorPos(ImVec2(bx + (slotW - 44.0f) / 2.0f, (barH - 44.0f) / 2.0f - 4.0f));
+      if (!canAfford) ImGui::PushStyleVar(ImGuiStyleVar_Alpha, 0.40f);
+      if (ImGui::ImageButton(slots[i].id, (void *)(intptr_t)slots[i].tex, ImVec2(40, 40))) {
+        if (canAfford) {
+          state.isPlacingTroop    = true;
+          state.selectedTroopType = slots[i].type;
+          audio::playOneShot("data/audio/selectionsound.mp3");
         }
       }
+      if (!canAfford) ImGui::PopStyleVar();
 
-      // Arcabuz (slot 1)
-      if (i == 1) {
-        ImGui::SetCursorPos(
-            ImVec2(slotX + (itemWidth - 60.0f) / 2.0f, (topBarHeight - 60.0f) / 2.0f));
-        if (ImGui::ImageButton(
-                "btn_arquebus", (void *)(intptr_t)textures_.arquebusIcon, ImVec2(50, 50))) {
-          if (state.gold >= kArquebusCost) {
-            state.isPlacingTroop = true;
-            state.selectedTroopType = 2;
-          }
-        }
+      if (ImGui::IsItemHovered()) {
+        ImGui::BeginTooltip();
+        const char *nome = (i == 0) ? "Arqueiro" : "Arcabuzeiro";
+        ImGui::TextColored(kColorGold, "%s", nome);
+        ImGui::Text("Custo: %d GP", slots[i].cost);
+        if (!canAfford) ImGui::TextColored(kColorRed, "Ouro insuficiente!");
+        ImGui::EndTooltip();
       }
+
+      // Custo embaixo
+      char costStr[12];
+      std::snprintf(costStr, sizeof(costStr), "%d GP", slots[i].cost);
+      float tw = ImGui::CalcTextSize(costStr).x;
+      ImGui::SetCursorPos(ImVec2(bx + (slotW - tw) / 2.0f, barH - 18.0f));
+      ImGui::TextColored(canAfford ? kColorGold : kColorRed, "%s", costStr);
     }
 
-    // -----------------------------------------------------------------------
-    // Info da wave (placeholder)
-    // -----------------------------------------------------------------------
-    ImGui::SetCursorPos(ImVec2(state.fbWidth - 150.0f, 35.0f));
-    ImGui::Text("ONDADA: 1 / 10");
   }
   ImGui::End();
   ImGui::PopStyleColor();
   ImGui::PopStyleVar();
+}
 
-  // =========================================================================
-  // HUD DE DEBUG
-  // =========================================================================
-  ImGuiWindowFlags debugFlags = ImGuiWindowFlags_AlwaysAutoResize |
-                                ImGuiWindowFlags_NoSavedSettings |
-                                ImGuiWindowFlags_NoCollapse |
-                                ImGuiWindowFlags_NoMove;
+// ---------------------------------------------------------------------------
+// Barra de wave — horizontal, abaixo da top bar
+// ---------------------------------------------------------------------------
+void Hud::renderWaveBar(const AppState &state, const WaveState &ws) {
+  const float topBarH = 80.0f;
+  const float barH    = 32.0f;
 
-  ImGui::SetNextWindowPos(ImVec2(10.0f, topBarHeight + 10.0f), ImGuiCond_Always);
+  ImGuiWindowFlags flags =
+      ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings |
+      ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollWithMouse |
+      ImGuiWindowFlags_NoInputs;
 
-  if (ImGui::Begin("Debug", nullptr, debugFlags)) {
-    ImGui::Text("FPS: %.1f", fps);
-    ImGui::Separator();
+  ImGui::SetNextWindowPos(ImVec2(0, topBarH), ImGuiCond_Always);
+  ImGui::SetNextWindowSize(ImVec2((float)state.fbWidth, barH), ImGuiCond_Always);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.05f, 0.03f, 0.01f, 0.88f));
 
-    if (state.useFreeCamera) {
-      ImGui::Text("Camera: Livre [C]");
-      ImGui::Text("Yaw: %.2f | Pitch: %.2f", state.yaw, state.pitch);
+  if (ImGui::Begin("WaveBar", nullptr, flags)) {
+    ImDrawList *dl = ImGui::GetWindowDrawList();
+    const float W  = (float)state.fbWidth;
+
+    // Borda inferior fina
+    dl->AddLine(ImVec2(0, topBarH + barH - 1), ImVec2(W, topBarH + barH - 1),
+                IM_COL32(120, 80, 20, 160), 1.0f);
+
+    if (ws.phase == WavePhase::Victory) {
+      const char *v = "  VICT\xc3\x93RIA!  Todas as ondas foram derrotadas.";
+      ImGui::SetCursorPos(ImVec2((W - ImGui::CalcTextSize(v).x) * 0.5f, 7.0f));
+      ImGui::TextColored(kColorGold, "%s", v);
     } else {
-      ImGui::Text("Camera: Orbital [C]");
-      ImGui::Text("Raio: %.2f", state.orbitRadius);
-    }
+      const WaveDef &def = kWaves[ws.currentWave];
 
-    ImGui::Spacing();
-    ImGui::Text("Curva Guia [T]: %s", state.showCurve ? "ON" : "OFF");
+      // Rótulo da onda (esquerda)
+      char lbl[24];
+      std::snprintf(lbl, sizeof(lbl), "  ONDA %d / 10", ws.currentWave + 1);
+      const float lblW = 110.0f;
+      ImGui::SetCursorPos(ImVec2(8.0f, 8.0f));
+      ImGui::TextColored(kColorGold, "%s", lbl);
+
+      // Texto de fase (direita)
+      char rhs[40];
+      if (ws.phase == WavePhase::Intermission) {
+        int secs = static_cast<int>(ws.timer) + 1;
+        std::snprintf(rhs, sizeof(rhs), "Em %ds  \xe2\x80\x94  [Y] Pular  ", secs);
+      } else if (ws.phase == WavePhase::Starting) {
+        std::snprintf(rhs, sizeof(rhs), "  INICIANDO...  ");
+      } else {
+        std::snprintf(rhs, sizeof(rhs), "Mortos: %d / %d  ",
+                      ws.killedCount, def.enemyCount);
+      }
+      float rhsW = ImGui::CalcTextSize(rhs).x;
+      ImGui::SetCursorPos(ImVec2(W - rhsW - 6.0f, 8.0f));
+      ImVec4 rhsColor = (ws.phase == WavePhase::Intermission) ? kColorMuted
+                      : (ws.phase == WavePhase::Starting)      ? kColorGold
+                                                               : kColorGreen;
+      ImGui::TextColored(rhsColor, "%s", rhs);
+
+      // Barra de progresso (centro, toma o espaço restante)
+      const float barPad = 8.0f;
+      const float bx     = lblW + barPad;
+      const float bw     = W - lblW - rhsW - barPad * 2.0f - 12.0f;
+      const float by     = topBarH + 11.0f;
+      const float bh     = 10.0f;
+
+      float prog;
+      if (ws.phase == WavePhase::Intermission) {
+        float total = def.intermissionSecs;
+        prog = (total > 0) ? (1.0f - ws.timer / total) : 1.0f;
+      } else if (ws.phase == WavePhase::Starting) {
+        prog = 1.0f - (ws.startingTimer / 5.0f);
+      } else {
+        int total = def.enemyCount;
+        prog = (total > 0) ? static_cast<float>(ws.killedCount) / total : 1.0f;
+      }
+      if (prog < 0.0f) prog = 0.0f;
+      if (prog > 1.0f) prog = 1.0f;
+
+      // Trilho
+      dl->AddRectFilled(ImVec2(bx, by), ImVec2(bx + bw, by + bh),
+                        IM_COL32(25, 16, 5, 220), 4.0f);
+      // Preenchimento
+      if (bw * prog > 1.0f) {
+        ImU32 barColor = (ws.phase == WavePhase::Intermission) ? IM_COL32(60, 120, 200, 230)
+                       : (ws.phase == WavePhase::Starting)      ? IM_COL32(200, 160, 30, 230)
+                                                                : IM_COL32(190, 65, 40, 230);
+        dl->AddRectFilled(ImVec2(bx, by), ImVec2(bx + bw * prog, by + bh), barColor, 4.0f);
+      }
+      // Moldura
+      dl->AddRect(ImVec2(bx, by), ImVec2(bx + bw, by + bh),
+                  IM_COL32(90, 60, 15, 180), 4.0f);
+    }
   }
   ImGui::End();
+  ImGui::PopStyleColor();
+  ImGui::PopStyleVar();
+}
+
+// ---------------------------------------------------------------------------
+// Overlay de Intermission (centro da tela)
+// ---------------------------------------------------------------------------
+void Hud::renderIntermissionOverlay(const WaveState &ws) {
+  if (ws.phase != WavePhase::Intermission) return;
+
+  const WaveDef &def  = kWaves[ws.currentWave];
+  const float topBarH = 80.0f;
+  const float waveBarH = 32.0f;
+  const float bannerY  = topBarH + waveBarH;   // logo abaixo das duas barras
+  const float bannerH  = 54.0f;
+
+  ImGuiIO &io = ImGui::GetIO();
+  const float W = io.DisplaySize.x;
+
+  ImGui::SetNextWindowPos(ImVec2(0.0f, bannerY), ImGuiCond_Always);
+  ImGui::SetNextWindowSize(ImVec2(W, bannerH), ImGuiCond_Always);
+
+  ImGuiWindowFlags flags =
+      ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings |
+      ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollWithMouse;
+
+  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.07f, 0.04f, 0.01f, 0.93f));
+  ImGui::PushStyleColor(ImGuiCol_Border,   ImVec4(0.55f, 0.38f, 0.10f, 1.00f));
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.5f);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,    ImVec2(0.0f, 0.0f));
+
+  if (ImGui::Begin("##IntermissionBanner", nullptr, flags)) {
+    ImDrawList *dl = ImGui::GetWindowDrawList();
+
+    const float fontSize = ImGui::GetTextLineHeight();
+    // Duas linhas de texto: centralizar o bloco verticalmente
+    const float blockH  = fontSize * 2.0f + 4.0f;
+    const float yTop    = (bannerH - blockH) * 0.5f - 1.0f;
+    const float yBot    = yTop + fontSize + 4.0f;
+
+    // ---- Seção esquerda: rótulo da onda ----
+    const float leftW = 170.0f;
+    ImGui::SetCursorPos(ImVec2(14.0f, yTop));
+    ImGui::TextColored(kColorMuted, "PR\xc3\x93XIMA ONDA");
+    ImGui::SetCursorPos(ImVec2(14.0f, yBot));
+    ImGui::TextColored(kColorGold, "%s", def.label);
+
+    // Separador esquerdo
+    dl->AddLine(ImVec2(leftW, bannerY + 6.0f), ImVec2(leftW, bannerY + bannerH - 6.0f),
+                IM_COL32(100, 70, 20, 140), 1.0f);
+
+    // ---- Seção central: ícone + stats ----
+    const float iconSz = 40.0f;
+    const float iconX  = leftW + 10.0f;
+    const float iconY  = (bannerH - iconSz) * 0.5f;
+
+    // Fundo e borda do ícone
+    ImVec2 icSS = ImVec2(iconX, bannerY + iconY);
+    dl->AddRectFilled(icSS, ImVec2(icSS.x + iconSz, icSS.y + iconSz),
+                      IM_COL32(15, 10, 4, 220), 4.0f);
+    dl->AddRect(icSS, ImVec2(icSS.x + iconSz, icSS.y + iconSz),
+                IM_COL32(130, 88, 18, 200), 4.0f, 0, 1.0f);
+
+    ImGui::SetCursorPos(ImVec2(iconX, iconY));
+    ImGui::Image((void *)(intptr_t)textures_.zombiePortrait, ImVec2(iconSz, iconSz));
+    if (ImGui::IsItemHovered()) {
+      ImGui::BeginTooltip();
+      ImGui::TextColored(kColorGold, "Zumbi");
+      ImGui::Separator();
+      ImGui::Text("Quantidade : %d", def.enemyCount);
+      ImGui::Text("Vida       : %d", def.enemyStats.maxHp);
+      ImGui::Text("Velocidade : %.1f", def.enemyStats.speed);
+      ImGui::Text("Dano       : %d", def.enemyStats.damage);
+      ImGui::EndTooltip();
+    }
+
+    const float statsX = iconX + iconSz + 10.0f;
+    ImGui::SetCursorPos(ImVec2(statsX, yTop));
+    ImGui::TextColored(kColorCream, "Zumbis");
+    ImGui::SameLine(0, 6);
+    ImGui::TextColored(kColorGold, "\xc3\x97 %d", def.enemyCount);
+
+    ImGui::SetCursorPos(ImVec2(statsX, yBot));
+    ImGui::TextColored(kColorMuted, "HP %d", def.enemyStats.maxHp);
+    ImGui::SameLine(0, 14);
+    ImGui::TextColored(kColorMuted, "Vel %.1f", def.enemyStats.speed);
+    ImGui::SameLine(0, 14);
+    ImGui::TextColored(kColorMuted, "Dano %d", def.enemyStats.damage);
+
+    // ---- Seção direita: countdown ----
+    const float rightW = 160.0f;
+    dl->AddLine(ImVec2(W - rightW, bannerY + 6.0f), ImVec2(W - rightW, bannerY + bannerH - 6.0f),
+                IM_COL32(100, 70, 20, 140), 1.0f);
+
+    int secs = static_cast<int>(ws.timer) + 1;
+    char cd[16];
+    std::snprintf(cd, sizeof(cd), "Em  %d s", secs);
+    ImGui::SetCursorPos(ImVec2(W - rightW + 12.0f, yTop));
+    ImGui::TextColored(kColorCream, "%s", cd);
+    ImGui::SetCursorPos(ImVec2(W - rightW + 12.0f, yBot));
+    ImGui::TextColored(kColorMuted, "[Y]  Pular");
+  }
+  ImGui::End();
+  ImGui::PopStyleVar(2);
+  ImGui::PopStyleColor(2);
+}
+
+// ---------------------------------------------------------------------------
+// Overlay de Vitória
+// ---------------------------------------------------------------------------
+void Hud::renderVictoryOverlay() {
+  // Mesma posição do banner de intermission — larga e baixa, acima do jogo
+  const float bannerY = 80.0f + 32.0f;
+  const float bannerH = 54.0f;
+
+  ImGuiIO &io = ImGui::GetIO();
+  const float W = io.DisplaySize.x;
+
+  ImGui::SetNextWindowPos(ImVec2(0.0f, bannerY), ImGuiCond_Always);
+  ImGui::SetNextWindowSize(ImVec2(W, bannerH), ImGuiCond_Always);
+
+  ImGuiWindowFlags flags =
+      ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings |
+      ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs;
+
+  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.03f, 0.10f, 0.03f, 0.95f));
+  ImGui::PushStyleColor(ImGuiCol_Border,   ImVec4(0.25f, 0.65f, 0.25f, 1.00f));
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.5f);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,    ImVec2(0.0f, 0.0f));
+
+  if (ImGui::Begin("##Victory", nullptr, flags)) {
+    const float fontSize = ImGui::GetTextLineHeight();
+    const float blockH   = fontSize * 2.0f + 4.0f;
+    const float yTop     = (bannerH - blockH) * 0.5f - 1.0f;
+    const float yBot     = yTop + fontSize + 4.0f;
+
+    const char *v1 = "VICT\xc3\x93RIA!";
+    ImGui::SetWindowFontScale(1.25f);
+    float v1W = ImGui::CalcTextSize(v1).x;
+    ImGui::SetWindowFontScale(1.0f);
+    ImGui::SetCursorPos(ImVec2((W - v1W * 1.25f) * 0.5f, yTop));
+    ImGui::SetWindowFontScale(1.25f);
+    ImGui::TextColored(kColorGold, "%s", v1);
+    ImGui::SetWindowFontScale(1.0f);
+
+    const char *v2 = "Todas as ondas foram derrotadas.";
+    ImGui::SetCursorPos(ImVec2((W - ImGui::CalcTextSize(v2).x) * 0.5f, yBot));
+    ImGui::TextColored(kColorGreen, "%s", v2);
+  }
+  ImGui::End();
+  ImGui::PopStyleVar(2);
+  ImGui::PopStyleColor(2);
+}
+
+// ---------------------------------------------------------------------------
+// Debug
+// ---------------------------------------------------------------------------
+void Hud::renderDebugWindow(const AppState &state, float fps) {
+  ImGuiWindowFlags flags =
+      ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings |
+      ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoMove;
+
+  // Abaixo da top bar (80) + wave bar (32)
+  ImGui::SetNextWindowPos(ImVec2(10.0f, 120.0f), ImGuiCond_Always);
+
+  if (ImGui::Begin("Debug", nullptr, flags)) {
+    ImGui::TextColored(kColorGold, "%.1f FPS", fps);
+    ImGui::Separator();
+    if (state.useFreeCamera) {
+      ImGui::TextColored(kColorMuted, "C\xc3\xa2mera Livre [C]");
+      ImGui::Text("Yaw %.1f  Pitch %.1f", state.yaw, state.pitch);
+    } else {
+      ImGui::TextColored(kColorMuted, "C\xc3\xa2mera Orbital [C]");
+      ImGui::Text("Raio %.1f", state.orbitRadius);
+    }
+    ImGui::Spacing();
+    ImGui::TextColored(kColorMuted, "Curva [T]: %s", state.showCurve ? "ON" : "OFF");
+  }
+  ImGui::End();
+}
+
+// ---------------------------------------------------------------------------
+void Hud::render(AppState &state, const WaveState &ws, float fps) {
+  renderTopBar(state, ws);
+  renderWaveBar(state, ws);
+  renderIntermissionOverlay(ws);
+  if (ws.phase == WavePhase::Victory) renderVictoryOverlay();
+  renderDebugWindow(state, fps);
 }
 
 void Hud::shutdown() {

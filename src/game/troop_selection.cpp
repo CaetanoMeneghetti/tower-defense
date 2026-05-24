@@ -4,6 +4,8 @@
 
 #include <cmath>
 
+#include "engine/audio.h"
+#include "game/collisions.h"
 #include "input/camera_controller.h"
 
 namespace troop_selection {
@@ -29,16 +31,17 @@ int update(GLFWwindow *window,
         window, cam, cameraPosition, state.fbWidth, state.fbHeight);
 
     selected = -1;
-    float minDist = kSelectionRadius;
+    float bestDist = kSelectionRadius;
     for (size_t i = 0; i < defenders.size(); ++i) {
       const float dx = defenders[i].position[0] - clickPos[0];
       const float dz = defenders[i].position[2] - clickPos[2];
-      const float dist = std::sqrt(dx * dx + dz * dz);
-      if (dist < minDist) {
-        minDist = dist;
-        selected = static_cast<int>(i);
-      }
+      if (!collisions::inRange(defenders[i].position[0], defenders[i].position[2],
+                                clickPos[0], clickPos[2], bestDist)) continue;
+      bestDist = std::sqrt(dx * dx + dz * dz);
+      selected = static_cast<int>(i);
     }
+    if (selected >= 0)
+      audio::playOneShot("data/audio/selectionsound.mp3");
   }
   leftMouseWasDown = leftMouseIsDown;
 

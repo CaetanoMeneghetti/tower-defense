@@ -85,3 +85,40 @@ Resultado: O método recursivo CalculateBoneTransform. Ele recebe o nó atual e 
 
 Resultado: O método LoadAnimation + dicionários internos da classe. A solução armazena as animações usando um mapa de ponteiros  m_AnimImporters. Ao carregar uma animação o escopo do leitor do Assimp fica travado na memória dentro da classe pelo tempo que for necessário.
 A cena gerada é salva em m_Animations[name] = scene, permitindo que o método GetTransformsAtTime faça buscas ultra rápidas por strings no frame-rate do jogo.
+
+---
+
+**PROMPT**: Quero um sistema de áudio completo para o meu jogo de Tower Defense usando a biblioteca miniaudio. Preciso de três categorias de sons: música de intermission (que toca entre as ondas, com posição da faixa preservada para retomar de onde parou), música de batalha (que toca durante as ondas, com o mesmo comportamento de pausa e retomada a partir da segunda onda) e efeitos sonoros de disparo (arcabuz, arqueiro) e impacto do cavaleiro. Para as músicas, quero que o jogo escolha aleatoriamente entre 3 faixas de batalha e 3 de intermission. O volume geral precisa ser baixo (cerca de 20% do máximo) e o áudio do início da wave, em especial, deve ser ainda mais discreto. O pause/resume deve funcionar com ma_sound_stop e ma_sound_start sem reinicializar o som, preservando o cursor de reprodução.
+
+Resultado: O módulo audio.h/audio.cpp com funções distintas para cada caso de uso: playMusic (batalha), pauseBattleMusic/resumeBattleMusic, startIntermissionMusic, pauseIntermissionMusic/resumeIntermissionMusic e playOneShotAt (para o waveStart com volume próprio). Cada categoria mantém um ma_sound estático separado (g_music, g_intermission, g_oneShotFull). O ma_engine_set_volume define o volume global em 0.20f na inicialização. A pausa usa ma_sound_stop sem ma_sound_uninit, garantindo que ma_sound_start retome exatamente de onde parou.
+
+---
+
+**PROMPT**: Preciso de um sistema de ondas (waves) para o meu Tower Defense com 10 fases configuráveis. Cada onda precisa ter: label de exibição, contagem de inimigos, intervalo entre spawns, stats dos inimigos (HP, velocidade, dano) e duração do intervalo de intermission. O fluxo deve ter quatro fases: Intermission (contagem regressiva com botão Y para pular), Starting (espera de 5 segundos enquanto toca o áudio de início da onda), Active (spawn sequencial respeitando os slots disponíveis) e Victory (ao terminar a onda 10). A partir da segunda onda, quero que ambos os tipos de inimigo (zumbi normal e blindado) apareçam misturados dentro da mesma onda, intercalados uniformemente. A função de atualização deve retornar o tipo de inimigo a spawnar (normal, blindado ou -1 para não spawnar) em vez de um booleano simples.
+
+Resultado: Struct WaveDef com campos armoredCount e armoredStats adicionados para definir a fração e os stats dos blindados por onda. A função updateWave teve seu retorno alterado de bool para int. O algoritmo de intercalamento usa a técnica de Bresenham: dado o índice de spawn i, compara floor(i × armoredCount / enemyCount) com floor((i+1) × ...) para decidir se o próximo spawn é blindado, distribuindo-os uniformemente sem estado extra no WaveState.
+
+---
+
+**PROMPT**: Quero uma barra horizontal de progresso de onda logo abaixo da barra principal do HUD que exiba o número da onda atual, o estado da fase (Intermission com contagem regressiva, Starting com "INICIANDO...", Active com "Mortos: X/Y") e uma barra de progresso visual com cor diferente por fase. Também quero um banner largo que aparece logo abaixo das duas barras durante a Intermission, exibindo o nome e os stats da próxima onda (HP, velocidade, dano, quantidade) com ícone do inimigo e tooltip. Nada de overlay centralizado na tela.
+
+Resultado: Função renderWaveBar posicionada em ImVec2(0, topBarH) com NoDecoration e NoInputs. A barra de progresso é desenhada manualmente com ImDrawList::AddRectFilled, trocando cor e valor de progresso conforme a fase (azul para intermission, dourado para starting, vermelho para active). O renderIntermissionOverlay é um banner fixo abaixo das duas barras, largura total, com três seções: rótulo da onda à esquerda, ícone + stats ao centro e countdown à direita, separados por linhas verticais com AddLine.
+
+---
+
+**PROMPT**: O arcabuz deve ter um ciclo de ataque em três fases: idle, disparo (animação "fire" com som e dano aplicados exatamente no primeiro frame) e recarga (animação "reload" tocada de trás para frente). Preciso que a animação de recarga seja reproduzida ao contrário sem criar um arquivo de animação separado. Implemente o controle de reversão dentro do próprio GameObject.
+
+Resultado: Flag reverseAnim adicionado ao GameObject junto com o método setAnimationReverse(name, startTime), que define animationTime = startTime e reverte a direção. O método update decrementa animationTime quando reverseAnim é true. O DefenderShoot ganhou o campo reloading para distinguir as três fases. No ciclo do arcabuz em defender_system: idle + inRange dispara imediatamente (som + dano no mesmo frame), fase aiming dura kArquebusFireDuration, depois transiciona para reloading com setAnimationReverse("reload", kArquebusReloadDuration) e retorna ao idle ao fim.
+
+---
+
+**PROMPT**: Meu jogo tem um cavaleiro que percorre o caminho de trás para frente e colide com os inimigos à sua frente. Preciso que ele tenha vida própria e, ao chegar em zero, execute uma animação de morte antes de desaparecer da cena, em vez de sumir instantaneamente. Quero reutilizar a animação de morte do zumbi comum para o cavaleiro. A vida atual e a vida máxima devem aparecer na tooltip ao passar o mouse por cima dele, não no HUD superior.
+
+Resultado: Campos dying e deathTimer adicionados ao KnightInstance. Quando HP chega a zero, alive vira false, dying vira true e knightModel.setAnimation("knightDeath") é chamado. Durante dying, a posição é mantida via getPositionAtDistance e o update continua por 2 segundos antes de dying virar false. O render passou a checar if (knight.alive || knight.dying). A tooltip exibe "Vida: X / Y" com separador, e o HUD superior não exibe mais a vida do cavaleiro.
+
+---
+
+**PROMPT**: Quero um círculo azul semitransparente ao redor da tropa selecionada que demonstre visualmente seu alcance de ataque e seja atualizado automaticamente quando a tropa sofrer upgrades. Também preciso que o shader de linha do projeto suporte uma cor configurável e uma matriz model, para poder posicionar e escalar o círculo sem alterar os vértices. O círculo giratório de seleção existente deve continuar funcionando normalmente.
+
+Resultado: Os shaders line.vert e line.frag receberam os uniforms mat4 model e vec4 lineColor. A struct LineUniforms ganhou os campos model e color. Um VAO com 64 vértices em GL_LINE_LOOP no plano XZ com raio 1.0 é gerado uma vez na inicialização com glGenVertexArrays e glBufferData. No draw, a model matrix é translate(troopPos) × scale(troop.range, 1, troop.range), resultando num círculo que acompanha automaticamente os upgrades de alcance via o campo range do GameObject.
+

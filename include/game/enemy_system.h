@@ -11,13 +11,18 @@
 // =============================================================================
 // INIMIGOS — STATS + ESTADO RUNTIME + UPDATE
 // =============================================================================
-// Stats por tipo (HP, velocidade no path, dano ao castelo). Para criar um novo
-// inimigo, basta declarar outra EnemyStats e instanciar uma EnemyInstance.
+
+
+namespace enemy_types {
+  constexpr int kNormal  = 0;
+  constexpr int kArmored = 1;
+}
 
 struct EnemyStats {
-  int maxHp;
+  int   maxHp;
   float speed;
-  int damage;
+  int   damage;
+  int   type = enemy_types::kNormal;
 };
 
 struct EnemyInstance {
@@ -26,8 +31,9 @@ struct EnemyInstance {
   float pathDistance;
   bool alive;
   float respawnTimer;
-  // Tempo restante de flash vermelho ao receber hit.
   float hitFlashTime;
+  // Quando true, o respawn automático é suprimido — o wave system controla.
+  bool waveControlled = false;
 };
 
 // Stats pré-definidas (declaração em .cpp).
@@ -36,11 +42,12 @@ extern const EnemyStats kZombieStats;
 // Inicializa uma instância no início do path.
 EnemyInstance makeEnemy(const EnemyStats &stats);
 
-// Resultado do tick do inimigo: posição atual + ângulo + se acabou de chegar.
+// Resultado do tick do inimigo.
 struct EnemyTickResult {
   Vector<3> position;
   float angle;
   bool reachedEnd;
+  bool diedThisFrame;  // morreu (hp=0) ou chegou ao castelo neste frame
 };
 
 // Avança o inimigo no path, decrementa respawn timer e atualiza flash.

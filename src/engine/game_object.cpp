@@ -57,9 +57,17 @@ void GameObject::setIdleAnimations(const std::vector<std::string> &idles) {
 void GameObject::setAnimation(const std::string &animName) {
   if (currentAnimation != animName) {
     currentAnimation = animName;
-    animationTime = 0.0f;
+    animationTime    = 0.0f;
   }
-  stateTimer = 0.0f;
+  reverseAnim = false;
+  stateTimer  = 0.0f;
+}
+
+void GameObject::setAnimationReverse(const std::string &animName, float startTime) {
+  currentAnimation = animName;
+  animationTime    = startTime;
+  reverseAnim      = true;
+  stateTimer       = 0.0f;
 }
 
 void GameObject::pickRandomIdle() {
@@ -77,7 +85,10 @@ void GameObject::pickRandomIdle() {
 
 void GameObject::update(float deltaTime) {
   if (!isActive) return;
-  animationTime += deltaTime;
+  if (reverseAnim)
+    animationTime -= deltaTime;
+  else
+    animationTime += deltaTime;
   if (!idleAnimations.empty()) {
     stateTimer += deltaTime;
     if (stateTimer >= timeToNextIdle) {
@@ -91,6 +102,10 @@ void GameObject::update(float deltaTime) {
 
 glm::mat4 GameObject::getBoneWorldTransform(const std::string &boneName) {
   if (!model) return glm::mat4(1.0f);
+
+  // Múltiplos GOs compartilham o AnimatedModel; globalNodeTransforms_ é estado
+  // compartilhado. Recalcula os bones para ESTE GO antes de ler o nó.
+  model->getTransformsAtTime(currentAnimation, animationTime);
 
   Matrix<4, 4> trans = translate<4, 4>(position[0], position[1], position[2]);
   Matrix<4, 4> rotY = rotateY<4, 4>(-rotationY);

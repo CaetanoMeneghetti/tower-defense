@@ -38,6 +38,8 @@ struct PathUniforms {
 struct LineUniforms {
   GLint view;
   GLint projection;
+  GLint model;
+  GLint color;
 };
 
 struct LanternUniforms {

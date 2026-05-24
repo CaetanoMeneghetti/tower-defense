@@ -57,12 +57,16 @@ class GameObject {
   std::vector<std::string> idleAnimations;
   float stateTimer;
   float timeToNextIdle;
+  bool  reverseAnim = false;  // se true, animationTime decrementa em update()
 
   GameObject(const TroopDef *def, Vector<3> startPos);
 
   void update(float deltaTime);
   void draw(unsigned int shaderId);
   void setAnimation(const std::string &animName);
+  // Inicia animação tocando de trás para frente (startTime = ponto de início,
+  // tipicamente a duração da animação). Útil para efeitos de "desfazer".
+  void setAnimationReverse(const std::string &animName, float startTime);
   void setIdleAnimations(const std::vector<std::string> &idles);
   glm::mat4 getBoneWorldTransform(const std::string &boneName);
 

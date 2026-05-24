@@ -20,8 +20,11 @@ set(SOURCES
   src/engine/primitive_meshes.cpp
   src/engine/shader_program.cpp
   src/engine/texture_loader.cpp
+  src/engine/audio.cpp
+  
 
   # game — regras de jogo (combate, placement, geração de cena)
+  src/game/collisions.cpp
   src/game/defender_system.cpp
   src/game/enemy_system.cpp
   src/game/path_navigation.cpp
@@ -29,6 +32,8 @@ set(SOURCES
   src/game/troop_placement.cpp
   src/game/troop_selection.cpp
   src/game/upgrade_system.cpp
+  src/game/knight_system.cpp
+  src/game/wave_system.cpp
 
   # input — callbacks GLFW + controle de câmera
   src/input/camera_controller.cpp
@@ -49,6 +54,7 @@ set(SOURCES
   src/imgui/imgui_widgets.cpp
   src/imgui/imgui_impl_glfw.cpp
   src/imgui/imgui_impl_opengl3.cpp
+  src/engine/audio_impl.cpp
 )
 
 cmake_minimum_required(VERSION 3.5.0)
@@ -141,6 +147,7 @@ add_custom_command(TARGET ${EXECUTABLE_NAME} POST_BUILD
 target_include_directories(${EXECUTABLE_NAME} BEFORE PRIVATE
     ${PROJECT_SOURCE_DIR}/include
     ${PROJECT_SOURCE_DIR}/src/imgui
+    ${PROJECT_SOURCE_DIR}/external/miniaudio
 )
 
 if(WIN32)
