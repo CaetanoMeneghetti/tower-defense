@@ -44,7 +44,7 @@ int update(GLFWwindow *window,
     if (selected >= 0) {
       state.cameraMode = CameraMode::Orbital;
       state.orbitTarget = defenders[selected].position;
-      audio::playOneShot("data/audio/selectionsound.mp3");
+      audio::playOneShot("data/audio/selection_sound.mp3");
     }
   }
   leftMouseWasDown = leftMouseIsDown;

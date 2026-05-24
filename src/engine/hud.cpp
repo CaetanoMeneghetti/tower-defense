@@ -133,7 +133,7 @@ void Hud::renderTopBar(AppState &state, const WaveState &ws) {
         if (canAfford) {
           state.isPlacingTroop    = true;
           state.selectedTroopType = slots[i].type;
-          audio::playOneShot("data/audio/selectionsound.mp3");
+          audio::playOneShot("data/audio/selection_sound.mp3");
         }
       }
       if (!canAfford) ImGui::PopStyleVar();

@@ -251,11 +251,11 @@ SceneTextures loadAllSceneTextures() {
   t.arquebusNormal     = loadTexture("data/textures/arquebus_normal.png");
   t.arquebusWeapon     = loadTexture("data/textures/arquebus_weapon.png");
 
-  t.swordColor  = loadTexture("data/textures/knightattachment.png");
-  t.shieldColor = loadTexture("data/textures/knightattachment.png");
+  t.swordColor  = loadTexture("data/textures/knight_attachment.png");
+  t.shieldColor = loadTexture("data/textures/knight_attachment.png");
 
   t.knightColor  = loadTexture("data/textures/knight.png");
-  t.knightNormal = loadTexture("data/textures/knightnormal.png");
+  t.knightNormal = loadTexture("data/textures/knight_normal.png");
 
   t.castleColor        = loadTexture("data/textures/castle.png");
   t.castleNormal       = loadTexture("data/textures/castle_normal.png");
@@ -263,8 +263,8 @@ SceneTextures loadAllSceneTextures() {
   t.treeLog            = loadTexture("data/textures/log.jpeg");
   t.treeLeaves         = loadTexture("data/textures/leaves.png", 4);
 
-  t.selectionCircle    = loadTexture("data/textures/selectioncircle.png", 4);
-  t.armoredZombieColor = loadTexture("data/textures/armorzombie.png", 4);
+  t.selectionCircle    = loadTexture("data/textures/selection_circle.png", 4);
+  t.armoredZombieColor = loadTexture("data/textures/armor_zombie.png", 4);
 
   return t;
 }
@@ -412,13 +412,13 @@ int run(GLFWwindow *window) {
   // ---------------------------------------------------------------------------
   // Modelos animados + estáticos
   // ---------------------------------------------------------------------------
-  AnimatedModel enemyBase("data/models/zombie/zombieT.glb");
-  enemyBase.loadAnimation("run",   "data/models/zombie/zombieRun.glb");
-  enemyBase.loadAnimation("death", "data/models/zombie/zombieDeath.glb");
+  AnimatedModel enemyBase("data/models/zombie/zombie_t.glb");
+  enemyBase.loadAnimation("run",   "data/models/zombie/zombie_run.glb");
+  enemyBase.loadAnimation("death", "data/models/zombie/zombie_death.glb");
 
-  AnimatedModel armoredZombieBase("data/models/armoredzombie/armoredzombie.glb");
-  armoredZombieBase.loadAnimation("run",   "data/models/armoredzombie/armoredzombieWalk.glb");
-  armoredZombieBase.loadAnimation("death", "data/models/armoredzombie/armoredzombieDeath.glb");
+  AnimatedModel armoredZombieBase("data/models/armored_zombie/armored_zombie.glb");
+  armoredZombieBase.loadAnimation("run",   "data/models/armored_zombie/armored_zombie_walk.glb");
+  armoredZombieBase.loadAnimation("death", "data/models/armored_zombie/armored_zombie_death.glb");
 
   // Arcabuz — 5 tiers (sistema de upgrade)
   AnimatedModel arquebusBase("data/models/arquebus/arquebus_t.glb");
@@ -435,8 +435,8 @@ int run(GLFWwindow *window) {
 
   for (AnimatedModel *m : {&arquebusBase, &arquebusBaseLvl2, &arquebusBaseLvl3,
                             &arquebusBaseLvl4, &arquebusBaseLvl5}) {
-    m->loadAnimation("fire",   "data/models/arquebus/arquebusFire.glb");
-    m->loadAnimation("reload", "data/models/arquebus/arquebusReload.glb");
+    m->loadAnimation("fire",   "data/models/arquebus/arquebus_fire.glb");
+    m->loadAnimation("reload", "data/models/arquebus/arquebus_reload.glb");
   }
 
   // Arqueiro — 5 tiers (sistema de upgrade)
@@ -460,10 +460,10 @@ int run(GLFWwindow *window) {
   archerBaseLvl5.loadAnimation("idle1", "data/models/archer/idle1.glb");
   archerBaseLvl5.loadAnimation("aim", "data/models/archer/aim_draw.glb");
 
-  AnimatedModel knightBase("data/models/knight/knightT.glb");
-  knightBase.loadAnimation("knightWalk",  "data/models/knight/knightIdle.glb");
-  knightBase.loadAnimation("knightSlash", "data/models/knight/knightAttack.glb");
-  knightBase.loadAnimation("knightDeath", "data/models/zombie/zombieDeath.glb");
+  AnimatedModel knightBase("data/models/knight/knight_t.glb");
+  knightBase.loadAnimation("knightWalk",  "data/models/knight/knight_idle.glb");
+  knightBase.loadAnimation("knightSlash", "data/models/knight/knight_attack.glb");
+  knightBase.loadAnimation("knightDeath", "data/models/zombie/zombie_death.glb");
 
 
   std::vector<Vertex> bowVertices;
@@ -679,8 +679,8 @@ Mesh shieldMesh(shieldVertices);
   static const char* kIntermissionTracks[] = {
     "data/audio/intermission1.mp3", "data/audio/intermission2.mp3", "data/audio/intermission3.mp3"
   };
-  static const char* kArcherShots[]   = {"data/audio/archerShot1.mp3",   "data/audio/archerShot2.mp3"};
-  static const char* kArquebusShots[] = {"data/audio/arquebusShot1.mp3", "data/audio/arquebusShot2.mp3"};
+  static const char* kArcherShots[]   = {"data/audio/archer_shot1.mp3",   "data/audio/archer_shot2.mp3"};
+  static const char* kArquebusShots[] = {"data/audio/arquebus_shot1.mp3", "data/audio/arquebus_shot2.mp3"};
 
   // Música de intermission começa imediatamente; posição preservada entre ondas
   audio::startIntermissionMusic(kIntermissionTracks[std::rand() % 3]);
@@ -741,7 +741,7 @@ Mesh shieldMesh(shieldVertices);
     if (waveState.phase != prevPhase) {
       if (waveState.phase == WavePhase::Starting) {
         audio::pauseIntermissionMusic();
-        audio::playOneShotAt("data/audio/waveStart.mp3", 0.25f);
+        audio::playOneShotAt("data/audio/wave_start.mp3", 0.25f);
       } else if (waveState.phase == WavePhase::Active) {
         if (battleMusicStarted) {
           audio::resumeBattleMusic();
@@ -766,7 +766,7 @@ Mesh shieldMesh(shieldVertices);
 
     KnightTickResult knightTick = updateKnight(
         knight, knightModel, enemies, enemyTicks, curvePoints, curveCache, deltaTime);
-    if (knightTick.hitThisFrame)  audio::playOneShot("data/audio/knightHit.mp3");
+    if (knightTick.hitThisFrame)  audio::playOneShot("data/audio/knight_hit.mp3");
     // ------- INPUT por frame -------
     processInput(window, cameraPosition, deltaTime);
 
@@ -933,7 +933,7 @@ Mesh shieldMesh(shieldVertices);
       GameObject &troop = defenders[selectedTroopIndex];
       if (drawTroopDetailsHud(troop, state, uiTextures.archerIcon)) {
         troop.upgrade();
-        audio::playOneShot("data/audio/selectionsound.mp3");
+        audio::playOneShot("data/audio/selection_sound.mp3");
       }
     }
 
