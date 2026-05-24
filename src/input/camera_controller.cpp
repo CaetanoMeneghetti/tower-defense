@@ -7,9 +7,9 @@
 #include "render/render_constants.h"
 
 void updateOrbitalCameraPosition(const AppState &s, Vector<3> &cameraPos) {
-  cameraPos[0] = s.orbitRadius * std::cos(s.orbitPitch) * std::sin(s.orbitYaw);
-  cameraPos[1] = s.orbitRadius * std::sin(s.orbitPitch);
-  cameraPos[2] = s.orbitRadius * std::cos(s.orbitPitch) * std::cos(s.orbitYaw);
+  cameraPos[0] = s.orbitTarget[0] + s.orbitRadius * std::cos(s.orbitPitch) * std::sin(s.orbitYaw);
+  cameraPos[1] = s.orbitTarget[1] + s.orbitRadius * std::sin(s.orbitPitch);
+  cameraPos[2] = s.orbitTarget[2] + s.orbitRadius * std::cos(s.orbitPitch) * std::cos(s.orbitYaw);
 }
 
 Vector<3> getMouseGroundPosition(GLFWwindow *window,

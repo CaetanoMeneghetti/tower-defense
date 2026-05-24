@@ -381,6 +381,10 @@ int run(GLFWwindow *window) {
 
   registerInputCallbacks(window);
 
+  // Default é câmera Livre
+  // Pursor capturado para olhar com o mouse
+  glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+
   // ---------------------------------------------------------------------------
   // HUD + texturas da HUD
   // ---------------------------------------------------------------------------
@@ -434,7 +438,7 @@ int run(GLFWwindow *window) {
     m->loadAnimation("fire",   "data/models/arquebus/arquebusFire.glb");
     m->loadAnimation("reload", "data/models/arquebus/arquebusReload.glb");
   }
-  
+
   // Arqueiro — 5 tiers (sistema de upgrade)
   AnimatedModel archerBase("data/models/archer/archer_t.glb");
   archerBase.loadAnimation("idle1", "data/models/archer/idle1.glb");
@@ -658,7 +662,11 @@ Mesh shieldMesh(shieldVertices);
   DirectionalLight moonLight = makeMoonLight();
 
   Camera cam;
+  // Estado da câmera Livre: só mutado por processInput (WASD/space/shift).
+  // Aérea e Orbital derivam sua posição em locais separados, preservando este.
   Vector<3> cameraPosition{0.0f, 2.0f, 5.0f};
+  // Posição efetiva da câmera no mundo neste frame (usada por shaders e raios).
+  Vector<3> viewPos = cameraPosition;
   Matrix<4, 4> identity = Matrix<4, 4>::identity();
 
   // ---------------------------------------------------------------------------
@@ -769,17 +777,21 @@ Mesh shieldMesh(shieldVertices);
     const float aspect = static_cast<float>(state.fbWidth) / static_cast<float>(state.fbHeight);
     cam.setPerspective(kFovDegrees * math_constants::kDegToRad, aspect, kNearPlane, kFarPlane);
 
-    if (state.useFreeCamera) {
+    if (state.cameraMode == CameraMode::Free) {
       cam.setFPS(cameraPosition, state.yaw, state.pitch);
-    } else {
-      updateOrbitalCameraPosition(state, cameraPosition);
-      Vector<3> lookTarget{0.0f, 0.0f, 0.0f};
-      cam.setLookAt(cameraPosition, lookTarget);
+      viewPos = cameraPosition;
+    } else if (state.cameraMode == CameraMode::Aerial) {
+      // Look-at fixa no alto, olhando direto para baixo
+      viewPos = Vector<3>{0.0f, 22.0f, 0.01f};
+      cam.setLookAt(viewPos, Vector<3>{0.0f, 0.0f, 0.0f});
+    } else {  // Orbital
+      updateOrbitalCameraPosition(state, viewPos);
+      cam.setLookAt(viewPos, state.orbitTarget);
     }
 
     auto glView = toOpenGLMatrix(cam.getViewMatrix());
     auto glProj = toOpenGLMatrix(cam.getProjectionMatrix());
-    const glm::vec3 glmViewPos(cameraPosition[0], cameraPosition[1], cameraPosition[2]);
+    const glm::vec3 glmViewPos(viewPos[0], viewPos[1], viewPos[2]);
 
     // ------- RENDER: entidades animadas (inimigo + defensores) -------
     uploadCommonUniforms(pipe.animShader, moonLight, lanternLights, glmViewPos, glView, glProj);
@@ -897,7 +909,7 @@ Mesh shieldMesh(shieldVertices);
     // ------- RENDER: preview de posicionamento de tropa -------
     if (state.isPlacingTroop) {
       TroopPlacementContext ctx{
-          window, cam, cameraPosition, curvePoints, pipe.previewShader,
+          window, cam, viewPos, curvePoints, pipe.previewShader,
           archerClass, arquebusClass, defenders, defenderShoots,
           glView.data(), glProj.data(),
       };
@@ -906,7 +918,7 @@ Mesh shieldMesh(shieldVertices);
 
     // ------- SELEÇÃO DE TROPA (clique no mundo) -------
     selectedTroopIndex = troop_selection::update(
-        window, cam, cameraPosition, defenders, state, selectedTroopIndex);
+        window, cam, viewPos, defenders, state, selectedTroopIndex);
 
     // ------- HUD + janela de upgrade (ImGui frame manual aqui pra empilhar) -------
     const float currentFps = 1.0f / deltaTime;
@@ -948,8 +960,8 @@ Mesh shieldMesh(shieldVertices);
 
         // Projeta pés (Y=0) e cabeça (Y=kH) e verifica se o mouse está dentro
         // do retângulo de tela com padding horizontal kPad.
-        const float kH   = 1.7f;   // altura aproximada do personagem em unidades do mundo
-        const float kPad = 25.0f;  // padding horizontal em pixels
+        const float kH   = 1.7f;   // Altura aproximada do personagem em unidades do mundo
+        const float kPad = 25.0f;  // Padding horizontal em pixels
         auto overModel = [&](float wx, float wz) -> bool {
           auto [sFoot, okF] = worldToScreen(wx, 0.0f, wz);
           auto [sHead, okH] = worldToScreen(wx, kH,   wz);

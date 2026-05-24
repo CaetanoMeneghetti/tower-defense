@@ -14,7 +14,7 @@ int update(GLFWwindow *window,
            const Camera &cam,
            const Vector<3> &cameraPosition,
            const std::vector<GameObject> &defenders,
-           const AppState &state,
+           AppState &state,
            int currentSelectedIndex) {
   int selected = currentSelectedIndex;
   ImGuiIO &io = ImGui::GetIO();
@@ -40,14 +40,23 @@ int update(GLFWwindow *window,
       bestDist = std::sqrt(dx * dx + dz * dz);
       selected = static_cast<int>(i);
     }
-    if (selected >= 0)
+
+    if (selected >= 0) {
+      state.cameraMode = CameraMode::Orbital;
+      state.orbitTarget = defenders[selected].position;
       audio::playOneShot("data/audio/selectionsound.mp3");
+    }
   }
   leftMouseWasDown = leftMouseIsDown;
 
-  // Botão direito limpa a seleção.
+  // Botão direito limpa a seleção e sai da câmera orbital.
   if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
     selected = -1;
+    if (state.cameraMode == CameraMode::Orbital) {
+      state.cameraMode = CameraMode::Free;
+      state.firstMouse = true;
+      glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    }
   }
 
   return selected;

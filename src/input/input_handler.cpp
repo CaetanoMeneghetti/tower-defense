@@ -17,7 +17,7 @@ namespace {
 
 void mouseCallback(GLFWwindow *window, double xPosIn, double yPosIn) {
   AppState &s = stateFromWindow(window);
-  if (!s.useFreeCamera) {
+  if (s.cameraMode != CameraMode::Free) {
     return;
   }
 
@@ -48,7 +48,7 @@ void mouseCallback(GLFWwindow *window, double xPosIn, double yPosIn) {
 
 void scrollCallback(GLFWwindow *window, double /*xoffset*/, double yoffset) {
   AppState &s = stateFromWindow(window);
-  if (s.useFreeCamera) {
+  if (s.cameraMode != CameraMode::Orbital) {
     return;
   }
   s.orbitRadius -= static_cast<float>(yoffset);
@@ -88,7 +88,7 @@ void processInput(GLFWwindow *window, Vector<3> &cameraPosition, float deltaTime
     glfwSetWindowShouldClose(window, true);
   }
 
-  if (s.useFreeCamera) {
+  if (s.cameraMode == CameraMode::Free) {
     const float speed = kFreeCameraSpeed * deltaTime;
     Vector<3> forward = directionFromYawPitch(s.yaw, s.pitch);
     Vector<3> up{0.0f, 1.0f, 0.0f};
@@ -101,7 +101,7 @@ void processInput(GLFWwindow *window, Vector<3> &cameraPosition, float deltaTime
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) cameraPosition += right * speed;
     if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS) cameraPosition[1] += speed;
     if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) cameraPosition[1] -= speed;
-  } else {
+  } else if (s.cameraMode == CameraMode::Orbital) {
     const float angularSpeed = kOrbitalAngularSpeed * deltaTime;
     if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) s.orbitYaw -= angularSpeed;
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) s.orbitYaw += angularSpeed;
@@ -111,13 +111,18 @@ void processInput(GLFWwindow *window, Vector<3> &cameraPosition, float deltaTime
     if (s.orbitPitch > kMaxPitchRad) s.orbitPitch = kMaxPitchRad;
     if (s.orbitPitch < -kMaxPitchRad) s.orbitPitch = -kMaxPitchRad;
   }
+  // Aerial: sem controles — câmera fixa observando o mapa.
 
-  // Toggle de câmera em C
+  // Toggle de câmera em C — cicla Free ↔ Aerial.
+  // A Orbital é entrada automática ao clicar em uma unidade; sai dela com
+  // botão direito (que também desseleciona em troop_selection).
   if (glfwGetKey(window, GLFW_KEY_C) == GLFW_PRESS) {
     if (!s.cPressed) {
-      s.useFreeCamera = !s.useFreeCamera;
       s.cPressed = true;
-      if (s.useFreeCamera) {
+      s.cameraMode = (s.cameraMode == CameraMode::Free)
+                         ? CameraMode::Aerial
+                         : CameraMode::Free;
+      if (s.cameraMode == CameraMode::Free) {
         glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
         s.firstMouse = true;
       } else {

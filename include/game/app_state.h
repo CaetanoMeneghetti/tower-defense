@@ -1,13 +1,21 @@
 #pragma once
 
 #include "math/constants.h"
+#include "math/vector.h"
 #include "render/render_constants.h"
 
 // =============================================================================
 // ESTADO GLOBAL DA APLICAÇÃO
 // =============================================================================
 // Compartilhado entre HUD, input e loop principal. Tudo que precisa persistir
-// entre frames e ser visível por mais de um módulo mora aqui.
+// entre frames e ser visível por mais de um módulo fica aqui
+
+// Três modos de câmera:
+//  - Free:    livre estilo FPS (WASD + mouse). Default.
+//  - Aerial:  look-at fixa do alto olhando direto para baixo.
+//  - Orbital: orbita em torno de uma entidade clicada (HUD de unidade).
+enum class CameraMode { Free, Aerial, Orbital };
+
 struct AppState {
   // ---- Jogador ----
   int gold = 99999;
@@ -18,10 +26,14 @@ struct AppState {
   int selectedTroopType = 0;
 
   // ---- Câmera (modo) ----
-  bool useFreeCamera = false;
+  CameraMode cameraMode = CameraMode::Free;
   bool cPressed = false;
   bool showCurve = false;
   bool tPressed = false;
+
+  // Alvo da câmera orbital (entidade focada). Atualizado ao clicar em uma
+  // unidade; usado como centro da órbita.
+  Vector<3> orbitTarget = {0.0f, 0.0f, 0.0f};
 
   // ---- Câmera livre (FPS) ----
   float yaw = -math_constants::kHalfPi;

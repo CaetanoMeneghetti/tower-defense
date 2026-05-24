@@ -422,11 +422,13 @@ void Hud::renderDebugWindow(const AppState &state, float fps) {
   if (ImGui::Begin("Debug", nullptr, flags)) {
     ImGui::TextColored(kColorGold, "%.1f FPS", fps);
     ImGui::Separator();
-    if (state.useFreeCamera) {
+    if (state.cameraMode == CameraMode::Free) {
       ImGui::TextColored(kColorMuted, "C\xc3\xa2mera Livre [C]");
       ImGui::Text("Yaw %.1f  Pitch %.1f", state.yaw, state.pitch);
+    } else if (state.cameraMode == CameraMode::Aerial) {
+      ImGui::TextColored(kColorMuted, "C\xc3\xa2mera A\xc3\xa9rea [C]");
     } else {
-      ImGui::TextColored(kColorMuted, "C\xc3\xa2mera Orbital [C]");
+      ImGui::TextColored(kColorMuted, "C\xc3\xa2mera Orbital (clique em unidade)");
       ImGui::Text("Raio %.1f", state.orbitRadius);
     }
     ImGui::Spacing();
