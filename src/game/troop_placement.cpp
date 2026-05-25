@@ -50,11 +50,20 @@ void handleTroopPlacement(const TroopPlacementContext &ctx, AppState &state, flo
       glGetUniformLocation(ctx.previewShader, "previewColor"), 1, glm::value_ptr(hColor));
 
   // 7. Desenha o "fantasma" na posição do mouse
-  const TroopDef *previewDef = (state.selectedTroopType == defender_types::kArcher)
-                                   ? &ctx.archerClass
-                                   : &ctx.arquebusClass;
+  const TroopDef *previewDef;
+  if (state.selectedTroopType == defender_types::kArcher)
+    previewDef = &ctx.archerClass;
+  else if (state.selectedTroopType == defender_types::kArquebus)
+    previewDef = &ctx.arquebusClass;
+  else if (state.selectedTroopType == defender_types::kKnight)
+    previewDef = &ctx.knightClass;
+  else
+    previewDef = &ctx.cannonClass;
   GameObject previewGhost(previewDef, groundPos);
-  previewGhost.setAnimation("idle1");
+  if (state.selectedTroopType == defender_types::kKnight)
+    previewGhost.setAnimation("knightIdle");
+  else
+    previewGhost.setAnimation("idle1");
   previewGhost.update(deltaTime);
   previewGhost.draw(ctx.previewShader);
 
@@ -68,15 +77,37 @@ void handleTroopPlacement(const TroopPlacementContext &ctx, AppState &state, flo
     if (state.selectedTroopType == defender_types::kArcher) {
       state.gold -= kArcherCost;
       GameObject newArcher(&ctx.archerClass, groundPos);
+      newArcher.damage   = kArcherArrowDamage;
+      newArcher.range    = kArcherRange;
+      newArcher.fireRate = 2.0f;
       newArcher.setIdleAnimations({"idle1"});
       ctx.defenders.push_back(newArcher);
-      ctx.defenderShoots.push_back(DefenderShoot{0.0f, false});
+      ctx.defenderShoots.push_back(DefenderShoot{});
     } else if (state.selectedTroopType == defender_types::kArquebus) {
       state.gold -= kArquebusCost;
       GameObject newArquebus(&ctx.arquebusClass, groundPos);
+      newArquebus.damage   = kArquebusBulletDamage;
+      newArquebus.range    = kArquebusRange;
+      newArquebus.fireRate = 2.0f;
       newArquebus.setIdleAnimations({"idle1"});
       ctx.defenders.push_back(newArquebus);
-      ctx.defenderShoots.push_back(DefenderShoot{0.0f, false});
+      ctx.defenderShoots.push_back(DefenderShoot{});
+    } else if (state.selectedTroopType == defender_types::kCannon) {
+      state.gold -= kCannonCost;
+      GameObject newCannon(&ctx.cannonClass, groundPos);
+      newCannon.damage = kCannonDamage;
+      newCannon.range  = kCannonRange;
+      newCannon.setIdleAnimations({"idle1"});
+      ctx.defenders.push_back(newCannon);
+      ctx.defenderShoots.push_back(DefenderShoot{});
+    } else if (state.selectedTroopType == defender_types::kKnight) {
+      state.gold -= kKnightCost;
+      GameObject newKnight(&ctx.knightClass, groundPos);
+      newKnight.damage = 1;  // invocações por comando
+      newKnight.range  = 0.0f;
+      newKnight.setIdleAnimations({"knightIdle"});
+      ctx.defenders.push_back(newKnight);
+      ctx.defenderShoots.push_back(DefenderShoot{});
     }
 
     state.isPlacingTroop = false;

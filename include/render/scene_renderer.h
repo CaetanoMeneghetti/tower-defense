@@ -103,7 +103,15 @@ void renderDefenderWeapons(GLuint objShader,
                            const ObjUniforms &u,
                            std::vector<GameObject> &defenders,
                            Mesh &bowMesh,
-                           unsigned int bowTexture);
+                           unsigned int bowTexture,
+                           Mesh &torchMesh,
+                           unsigned int torchTexture);
+
+void renderCannonBarrels(GLuint objShader,
+                         const ObjUniforms &u,
+                         const std::vector<GameObject> &defenders,
+                         Mesh &cannonBarrelMesh,
+                         unsigned int cannonBarrelTex);
 
 void renderCastle(GLuint objShader,
                   const ObjUniforms &u,

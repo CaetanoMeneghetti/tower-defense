@@ -15,6 +15,8 @@ struct HudTextures {
   unsigned int healthIcon;
   unsigned int archerIcon;
   unsigned int arquebusIcon;
+  unsigned int cannonIcon;
+  unsigned int knightIcon;
   unsigned int zombiePortrait;  // exibido no overlay de intermission
 };
 

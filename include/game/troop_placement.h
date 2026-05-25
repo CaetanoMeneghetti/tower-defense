@@ -27,6 +27,8 @@ struct TroopPlacementContext {
   unsigned int previewShader;
   const TroopDef &archerClass;
   const TroopDef &arquebusClass;
+  const TroopDef &cannonClass;
+  const TroopDef &knightClass;
   std::vector<GameObject> &defenders;
   std::vector<DefenderShoot> &defenderShoots;
   const float *glView;

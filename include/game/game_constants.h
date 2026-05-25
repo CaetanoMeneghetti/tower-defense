@@ -54,16 +54,32 @@ constexpr float kArquebusRange          = 10.0f;
 constexpr float kArquebusFireDuration   = 0.7f;   // duração da animação de disparo
 constexpr float kArquebusReloadDuration = 1.4f;   // duração da animação de reload
 constexpr int   kArquebusBulletDamage   = 20;
-// ---- Custos de tropas ----
-constexpr int kArcherCost = 50;
-constexpr int kArquebusCost = 75;
+// ---- Canhão ----
+constexpr float kCannonRange         = 12.0f;
+constexpr float kCannonFireDuration  = 1.2f;   // duração da animação de disparo
+constexpr float kCannonCowerDuration = 2.0f;   // duração da animação de encolhimento
+constexpr int   kCannonDamage        = 40;
+constexpr float kCannonBarrelOffset  = 1.0f;   // origem do mesh cannon.obj à frente do canhoneiro
+constexpr float kCannonBarrelScale   = 0.45f;  // escala do mesh cannon.obj
+constexpr float kCannonerBehindOffset = 0.7f;  // quanto o canhoneiro recua do ponto lógico
 
-// --- Espadachim
+// ---- Custos de tropas ----
+constexpr int kArcherCost   = 50;
+constexpr int kArquebusCost = 75;
+constexpr int kCannonCost   = 100;
+constexpr int kKnightCost   = 80;
+
+// --- Espadachim (path walker)
 constexpr int   kKnightMaxHp = 80;
 constexpr float kKnightSpeed = 1.5f;
 constexpr int   kKnightSlashDamage = 10;
 constexpr float kKnightSlashInterval = 0.8f;
 constexpr float kKnightCollisionRadius = 1.2f;
+
+// --- Comandante (defender colocável)
+constexpr int   kKnightCommanderCost         = 80;
+constexpr float kKnightCommandInterval       = 10.0f;  // segundos entre invocações
+constexpr float kKnightCommandAnimDuration   = 4.0f;   // duração da animação de comando
 // ---- Posicionamento de tropas ----
 // Folga adicional sobre o path para o overlay vermelho de inválido.
 constexpr float kTroopPathClearance = 0.5f;

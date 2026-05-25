@@ -14,18 +14,25 @@ struct DefenderShoot {
   float shootTimer = 0.0f;
   bool  aiming     = false;   // arqueiro: em animação de mira/disparo
   bool  reloading  = false;   // arcabuz: fase de reload após disparo
+  bool  reversing  = false;   // canhão: sub-fase reversa (fire_rev ou cower_rev)
 };
 
 namespace defender_types {
-constexpr int kNone    = 0;
-constexpr int kArcher  = 1;
+constexpr int kNone     = 0;
+constexpr int kArcher   = 1;
 constexpr int kArquebus = 2;
-constexpr int kKnight  = 3;
+constexpr int kKnight   = 3;
+constexpr int kCannon   = 4;
 }  // namespace defender_types
 
 struct DefenderFireResult {
-  int archerFired   = 0;  // quantos arqueiros dispararam neste frame
-  int arquebusFired = 0;  // quantos arcabuzes dispararam neste frame
+  int archerFired    = 0;
+  int arquebusFired  = 0;
+  int cannonFired    = 0;
+  int knightSummoned = 0;
+  int chargePlayed   = 0;
+  std::vector<glm::vec3> cannonShotPositions;
+  std::vector<glm::vec3> arquebusShotPositions;
 };
 
 // enemies     = todos os slots de inimigos (vivos e mortos)

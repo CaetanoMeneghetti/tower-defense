@@ -40,6 +40,7 @@ set(SOURCES
   src/input/input_handler.cpp
 
   # render — desenho da cena
+  src/render/particle_system.cpp
   src/render/scene_renderer.cpp
   src/render/shader_uniforms.cpp
 

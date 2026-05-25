@@ -1,8 +1,10 @@
 #include "render/scene_renderer.h"
 
+#include <cmath>
 #include <glm/gtc/type_ptr.hpp>
 #include <string>
 
+#include "game/defender_system.h"
 #include "game/game_constants.h"
 #include "math/constants.h"
 #include "math/matrix_ops.h"
@@ -199,16 +201,31 @@ void renderDefenders(GLuint shaderAnim,
                      std::vector<GameObject> &defenders,
                      unsigned int archerTex,
                      unsigned int archerNormal) {
-  // Arqueiro: textura/normal fixos (todos os tiers compartilham hoje).
-  // Arcabuz: pega do tier atual — abre espaço para tiers futuros com look próprio.
   for (auto &unit : defenders) {
-    if (unit.type == 1) {
+    if (unit.type == defender_types::kArcher) {
       bindColorAndNormal(shaderAnim, archerTex, archerNormal);
-    } else if (unit.type == 2) {
+    } else if (unit.type == defender_types::kArquebus ||
+               unit.type == defender_types::kCannon  ||
+               unit.type == defender_types::kKnight) {
       const TroopTier &tier = unit.getCurrentTier();
       bindColorAndNormal(shaderAnim, tier.texture, tier.normalMap);
     }
-    unit.draw(shaderAnim);
+
+    if (unit.type == defender_types::kCannon) {
+      // Recua o canhoneiro para trás do canh��o antes de desenhar.
+      const float behind = game_constants::kCannonerBehindOffset;
+      const float bkX =  std::sin(unit.rotationY);   // oposto de forward.x
+      const float bkZ = -std::cos(unit.rotationY);   // oposto de forward.z
+      float ox = unit.position[0];
+      float oz = unit.position[2];
+      unit.position[0] += bkX * behind;
+      unit.position[2] += bkZ * behind;
+      unit.draw(shaderAnim);
+      unit.position[0] = ox;
+      unit.position[2] = oz;
+    } else {
+      unit.draw(shaderAnim);
+    }
   }
 }
 
@@ -220,11 +237,11 @@ void renderDefenderWeapons(GLuint objShader,
                            const ObjUniforms &u,
                            std::vector<GameObject> &defenders,
                            Mesh &bowMesh,
-                           unsigned int bowTexture) {
-  // Arqueiro: arco fixo + offset cinemático hardcoded (igual nos 5 tiers).
-  // Arcabuz: mesh/textura/offset vêm do tier atual (ver game/upgrade_system.h).
+                           unsigned int bowTexture,
+                           Mesh &torchMesh,
+                           unsigned int torchTexture) {
   for (auto &unit : defenders) {
-    if (unit.type == 1) {
+    if (unit.type == defender_types::kArcher) {
       glm::mat4 handWorldMatrix = unit.getBoneWorldTransform("mixamorig:LeftHand");
 
       glm::mat4 offset = glm::mat4(0.0f);
@@ -236,26 +253,90 @@ void renderDefenderWeapons(GLuint objShader,
       offset[3][0] = 0.0f;
       offset[3][1] = -7.0f;
       offset[3][2] = 0.0f;
-      glm::mat4 finalBowMatrix = handWorldMatrix * offset;
 
-      glUniformMatrix4fv(u.model, 1, GL_FALSE, glm::value_ptr(finalBowMatrix));
+      glUniformMatrix4fv(u.model, 1, GL_FALSE, glm::value_ptr(handWorldMatrix * offset));
       glActiveTexture(GL_TEXTURE0);
       glBindTexture(GL_TEXTURE_2D, bowTexture);
       glUniform1i(glGetUniformLocation(objShader, "tex"), 0);
       bowMesh.draw();
-    } else if (unit.type == 2) {
+
+    } else if (unit.type == defender_types::kArquebus) {
       const TroopTier &tier = unit.getCurrentTier();
       if (!tier.weaponMesh) continue;
 
       glm::mat4 handWorldMatrix = unit.getBoneWorldTransform("mixamorig:LeftHand");
-      glm::mat4 finalWeaponMatrix = handWorldMatrix * tier.weaponOffset;
 
-      glUniformMatrix4fv(u.model, 1, GL_FALSE, glm::value_ptr(finalWeaponMatrix));
+      glUniformMatrix4fv(u.model, 1, GL_FALSE, glm::value_ptr(handWorldMatrix * tier.weaponOffset));
       glActiveTexture(GL_TEXTURE0);
       glBindTexture(GL_TEXTURE_2D, tier.weaponTexture);
       glUniform1i(glGetUniformLocation(objShader, "tex"), 0);
       tier.weaponMesh->draw();
+
+    } else if (unit.type == defender_types::kCannon) {
+      // O canhoneiro é renderizado deslocado para trás do ponto lógico; o bone
+      // deve ser calculado a partir dessa mesma posição deslocada.
+      const float behind = game_constants::kCannonerBehindOffset;
+      const float bkX =  std::sin(unit.rotationY);
+      const float bkZ = -std::cos(unit.rotationY);
+      const float ox = unit.position[0];
+      const float oz = unit.position[2];
+      unit.position[0] += bkX * behind;
+      unit.position[2] += bkZ * behind;
+
+      glm::mat4 handWorldMatrix = unit.getBoneWorldTransform("mixamorig:LeftHand");
+
+      unit.position[0] = ox;
+      unit.position[2] = oz;
+
+      glm::mat4 torchOffset = glm::mat4(0.0f);
+      const float ts = 8.0f;
+      torchOffset[0][1] = ts;   // torch X → hand Y (forward)
+      torchOffset[1][0] = -ts;  // torch Y → hand -X (world up)
+      torchOffset[2][2] = ts;   // torch Z → hand Z (left)
+      torchOffset[3][3] = 1.0f;
+
+      glUniformMatrix4fv(u.model, 1, GL_FALSE, glm::value_ptr(handWorldMatrix * torchOffset));
+      glActiveTexture(GL_TEXTURE0);
+      glBindTexture(GL_TEXTURE_2D, torchTexture);
+      glUniform1i(glGetUniformLocation(objShader, "tex"), 0);
+      torchMesh.draw();
     }
+  }
+}
+
+// =============================================================================
+// CANHÕES (barris estáticos posicionados à frente de cada canhoneiro)
+// =============================================================================
+
+void renderCannonBarrels(GLuint objShader,
+                         const ObjUniforms &u,
+                         const std::vector<GameObject> &defenders,
+                         Mesh &cannonBarrelMesh,
+                         unsigned int cannonBarrelTex) {
+  using game_constants::kCannonBarrelOffset;
+  using game_constants::kCannonBarrelScale;
+
+  glActiveTexture(GL_TEXTURE0);
+  glBindTexture(GL_TEXTURE_2D, cannonBarrelTex);
+  glUniform1i(glGetUniformLocation(objShader, "tex"), 0);
+
+  for (const auto &unit : defenders) {
+    if (unit.type != defender_types::kCannon) continue;
+
+    // Forward = (-sin(rotY), 0, cos(rotY)) — mesma convenção que GameObject::draw usa
+    // (draw aplica rotateY(-rotationY), cujo +Z em world-space é exatamente esse vetor).
+    float fwdX = -std::sin(unit.rotationY);
+    float fwdZ =  std::cos(unit.rotationY);
+    float bx = unit.position[0] + fwdX * kCannonBarrelOffset;
+    float by = unit.position[1];
+    float bz = unit.position[2] + fwdZ * kCannonBarrelOffset;
+
+    Matrix<4, 4> mt = translate<4, 4>(bx, by, bz);
+    Matrix<4, 4> mr = rotateY<4, 4>(math_constants::kPi - unit.rotationY);  // inverte muzzle
+    Matrix<4, 4> ms = scale<4, 4>(kCannonBarrelScale, kCannonBarrelScale, kCannonBarrelScale);
+    auto gl = toOpenGLMatrix(mt * mr * ms);
+    glUniformMatrix4fv(u.model, 1, GL_FALSE, gl.data());
+    cannonBarrelMesh.draw();
   }
 }
 

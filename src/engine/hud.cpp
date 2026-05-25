@@ -70,6 +70,8 @@ void Hud::setupStyle() {
 void Hud::renderTopBar(AppState &state, const WaveState &ws) {
   using game_constants::kArcherCost;
   using game_constants::kArquebusCost;
+  using game_constants::kCannonCost;
+  using game_constants::kKnightCost;
 
   const float barH = 80.0f;
   ImGuiWindowFlags flags =
@@ -108,15 +110,17 @@ void Hud::renderTopBar(AppState &state, const WaveState &ws) {
 
     // ---- Slots de tropas ----
     const float slotW = 72.0f;
-    float slotStartX = (state.fbWidth / 2.0f) - slotW;  // 2 slots centrados
+    float slotStartX = (state.fbWidth / 2.0f) - 2.0f * slotW;  // 4 slots centrados
 
-    struct SlotDef { const char *id; unsigned int tex; int cost; int type; };
-    const SlotDef slots[2] = {
-      { "btn_archer",   textures_.archerIcon,  kArcherCost,  1 },
-      { "btn_arquebus", textures_.arquebusIcon, kArquebusCost, 2 },
+    struct SlotDef { const char *id; unsigned int tex; int cost; int type; const char *nome; };
+    const SlotDef slots[4] = {
+      { "btn_archer",   textures_.archerIcon,   kArcherCost,   1, "Arqueiro"    },
+      { "btn_arquebus", textures_.arquebusIcon,  kArquebusCost, 2, "Arcabuzeiro" },
+      { "btn_cannon",   textures_.cannonIcon,    kCannonCost,   4, "Canhoneiro"  },
+      { "btn_knight",   textures_.knightIcon,    kKnightCost,   3, "Comandante"  },
     };
 
-    for (int i = 0; i < 2; i++) {
+    for (int i = 0; i < 4; i++) {
       float bx = slotStartX + i * slotW;
       bool selected  = state.isPlacingTroop && state.selectedTroopType == slots[i].type;
       bool canAfford = state.gold >= slots[i].cost;
@@ -140,8 +144,7 @@ void Hud::renderTopBar(AppState &state, const WaveState &ws) {
 
       if (ImGui::IsItemHovered()) {
         ImGui::BeginTooltip();
-        const char *nome = (i == 0) ? "Arqueiro" : "Arcabuzeiro";
-        ImGui::TextColored(kColorGold, "%s", nome);
+        ImGui::TextColored(kColorGold, "%s", slots[i].nome);
         ImGui::Text("Custo: %d GP", slots[i].cost);
         if (!canAfford) ImGui::TextColored(kColorRed, "Ouro insuficiente!");
         ImGui::EndTooltip();

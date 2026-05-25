@@ -58,6 +58,7 @@
 #include "input/input_handler.h"
 
 // ---- render ----
+#include "render/particle_system.h"
 #include "render/render_constants.h"
 #include "render/scene_renderer.h"
 #include "render/shader_uniforms.h"
@@ -80,6 +81,7 @@ struct ShaderPipeline {
   GLuint lanternShader = 0;
   GLuint previewShader = 0;
   GLuint animShader = 0;
+  GLuint particleShader = 0;
 
   GroundUniforms groundU{};
   ObjUniforms objU{};
@@ -101,6 +103,7 @@ bool loadAllShaders(ShaderPipeline &p) {
   p.lanternShader  = createShaderProgram("data/shaders/lantern.vert", "data/shaders/lantern.frag");
   p.previewShader  = createShaderProgram("data/shaders/preview.vert", "data/shaders/preview.frag");
   p.animShader     = createShaderProgram("data/shaders/anim_shader.vert", "data/shaders/anim_shader.frag");
+  p.particleShader = createShaderProgram("data/shaders/particle.vert",    "data/shaders/particle.frag");
 
   if (!p.groundShader || !p.objShader || !p.pathShader || !p.lineShader || !p.lanternShader) {
     std::cout << "ERRO: Falha ao criar um ou mais shaders" << std::endl;
@@ -129,6 +132,7 @@ void deleteAllShaders(ShaderPipeline &p) {
   glDeleteProgram(p.previewShader);
   glDeleteProgram(p.skyShader);
   glDeleteProgram(p.animShader);
+  glDeleteProgram(p.particleShader);
 }
 
 // =============================================================================
@@ -214,6 +218,12 @@ struct SceneTextures {
 
   unsigned int selectionCircle;
   unsigned int armoredZombieColor;
+
+  unsigned int cannonerColor;
+  unsigned int cannonerNormal;
+  unsigned int cannonBarrelColor;
+  unsigned int torchColor;
+  unsigned int smokeTexture;
 };
 
 SceneTextures loadAllSceneTextures() {
@@ -251,11 +261,11 @@ SceneTextures loadAllSceneTextures() {
   t.arquebusNormal     = loadTexture("data/textures/arquebus_normal.png");
   t.arquebusWeapon     = loadTexture("data/textures/arquebus_weapon.png");
 
-  t.swordColor  = loadTexture("data/textures/knight_attachment.png");
-  t.shieldColor = loadTexture("data/textures/knight_attachment.png");
+  t.swordColor  = loadTexture("data/textures/knightattachment.png");
+  t.shieldColor = loadTexture("data/textures/knightattachment.png");
 
   t.knightColor  = loadTexture("data/textures/knight.png");
-  t.knightNormal = loadTexture("data/textures/knight_normal.png");
+  t.knightNormal = loadTexture("data/textures/knightnormal.png");
 
   t.castleColor        = loadTexture("data/textures/castle.png");
   t.castleNormal       = loadTexture("data/textures/castle_normal.png");
@@ -263,8 +273,14 @@ SceneTextures loadAllSceneTextures() {
   t.treeLog            = loadTexture("data/textures/log.jpeg");
   t.treeLeaves         = loadTexture("data/textures/leaves.png", 4);
 
-  t.selectionCircle    = loadTexture("data/textures/selection_circle.png", 4);
-  t.armoredZombieColor = loadTexture("data/textures/armor_zombie.png", 4);
+  t.selectionCircle    = loadTexture("data/textures/selectioncircle.png", 4);
+  t.armoredZombieColor = loadTexture("data/textures/armorzombie.png", 4);
+
+  t.cannonerColor      = loadTexture("data/textures/cannoner.png");
+  t.cannonerNormal     = loadTexture("data/textures/cannoner_normal.png");
+  t.cannonBarrelColor  = loadTexture("data/textures/cannon.png");
+  t.torchColor         = loadTexture("data/textures/torch.png");
+  t.smokeTexture       = loadTexture("data/textures/smoke.png", 4);
 
   return t;
 }
@@ -282,6 +298,7 @@ void deleteAllSceneTextures(const SceneTextures &t) {
       t.treeLog, t.treeLeaves,
       t.swordColor, t.shieldColor,
       t.selectionCircle, t.armoredZombieColor,
+      t.cannonerColor, t.cannonerNormal, t.cannonBarrelColor, t.torchColor, t.smokeTexture,
   };
   for (unsigned int tex : all) {
     if (tex != 0) glDeleteTextures(1, &tex);
@@ -381,10 +398,6 @@ int run(GLFWwindow *window) {
 
   registerInputCallbacks(window);
 
-  // Default é câmera Livre
-  // Pursor capturado para olhar com o mouse
-  glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-
   // ---------------------------------------------------------------------------
   // HUD + texturas da HUD
   // ---------------------------------------------------------------------------
@@ -396,7 +409,9 @@ int run(GLFWwindow *window) {
   uiTextures.healthIcon    = loadTexture("data/textures/ui_health.png", 4);
   uiTextures.archerIcon    = loadTexture("data/textures/ui_archer.png", 4);
   uiTextures.arquebusIcon  = loadTexture("data/textures/ui_arquebus.png", 4);
-  uiTextures.zombiePortrait = loadTexture("data/textures/zombie.png", 4);
+  uiTextures.cannonIcon     = loadTexture("data/textures/ui_cannoner.png", 4);
+  uiTextures.knightIcon     = loadTexture("data/textures/ui_knight.png", 4);
+  uiTextures.zombiePortrait = loadTexture("data/textures/ui_zombie.png", 4);
   gameHud.setTextures(uiTextures);
 
   // ---------------------------------------------------------------------------
@@ -416,9 +431,9 @@ int run(GLFWwindow *window) {
   enemyBase.loadAnimation("run",   "data/models/zombie/zombie_run.glb");
   enemyBase.loadAnimation("death", "data/models/zombie/zombie_death.glb");
 
-  AnimatedModel armoredZombieBase("data/models/armored_zombie/armored_zombie.glb");
-  armoredZombieBase.loadAnimation("run",   "data/models/armored_zombie/armored_zombie_walk.glb");
-  armoredZombieBase.loadAnimation("death", "data/models/armored_zombie/armored_zombie_death.glb");
+  AnimatedModel armoredZombieBase("data/models/armoredzombie/armoredzombie.glb");
+  armoredZombieBase.loadAnimation("run",   "data/models/armoredzombie/armoredzombie_walk.glb");
+  armoredZombieBase.loadAnimation("death", "data/models/armoredzombie/armoredzombie_death.glb");
 
   // Arcabuz — 5 tiers (sistema de upgrade)
   AnimatedModel arquebusBase("data/models/arquebus/arquebus_t.glb");
@@ -438,7 +453,7 @@ int run(GLFWwindow *window) {
     m->loadAnimation("fire",   "data/models/arquebus/arquebus_fire.glb");
     m->loadAnimation("reload", "data/models/arquebus/arquebus_reload.glb");
   }
-
+  
   // Arqueiro — 5 tiers (sistema de upgrade)
   AnimatedModel archerBase("data/models/archer/archer_t.glb");
   archerBase.loadAnimation("idle1", "data/models/archer/idle1.glb");
@@ -460,10 +475,18 @@ int run(GLFWwindow *window) {
   archerBaseLvl5.loadAnimation("idle1", "data/models/archer/idle1.glb");
   archerBaseLvl5.loadAnimation("aim", "data/models/archer/aim_draw.glb");
 
+  // Canhoneiro — tier único (sem modelos por nível ainda)
+  AnimatedModel cannonerBase("data/models/cannon/cannoner_t.glb");
+  cannonerBase.loadAnimation("idle1", "data/models/cannon/cannoner_idle.glb");
+  cannonerBase.loadAnimation("fire",  "data/models/cannon/cannoner_fire.glb");
+  cannonerBase.loadAnimation("cower", "data/models/cannon/cannoner_cower.glb");
+
   AnimatedModel knightBase("data/models/knight/knight_t.glb");
-  knightBase.loadAnimation("knightWalk",  "data/models/knight/knight_idle.glb");
+  knightBase.loadAnimation("knightWalk",  "data/models/knight/knight_walk.glb");
+  knightBase.loadAnimation("knightIdle",  "data/models/knight/knight_idle.glb");
   knightBase.loadAnimation("knightSlash", "data/models/knight/knight_attack.glb");
   knightBase.loadAnimation("knightDeath", "data/models/zombie/zombie_death.glb");
+  knightBase.loadAnimation("command",     "data/models/knight/knight_command.glb");
 
 
   std::vector<Vertex> bowVertices;
@@ -521,6 +544,18 @@ Mesh shieldMesh(shieldVertices);
     std::cout << "ERRO: Nao encontrou arquebus_weapon.obj" << std::endl;
   }
   Mesh arquebusMesh(arquebusVertices);
+
+  std::vector<Vertex> cannonBarrelVertices;
+  if (!loadObj("data/models/cannon/cannon.obj", cannonBarrelVertices)) {
+    std::cout << "ERRO: Nao encontrou cannon.obj" << std::endl;
+  }
+  Mesh cannonBarrelMesh(cannonBarrelVertices);
+
+  std::vector<Vertex> torchVertices;
+  if (!loadObj("data/models/cannon/torch.obj", torchVertices)) {
+    std::cout << "ERRO: Nao encontrou torch.obj" << std::endl;
+  }
+  Mesh torchMesh(torchVertices);
 
   std::vector<Vertex> castleVertices;
   loadObj("data/models/world/castle.obj", castleVertices);
@@ -610,6 +645,11 @@ Mesh shieldMesh(shieldVertices);
             &arquebusMesh, tex.arquebusWeapon, arqOffset);
   }
 
+  TroopDef cannonClass;
+  cannonClass.type = defender_types::kCannon;
+  addTier(cannonClass, &cannonerBase, tex.cannonerColor, tex.cannonerNormal,
+          nullptr, 0, glm::mat4(1.0f));
+
   TroopDef knightClass;
   knightClass.type = defender_types::kKnight;
   addTier(knightClass, &knightBase, tex.knightColor, tex.knightNormal,
@@ -645,10 +685,10 @@ Mesh shieldMesh(shieldVertices);
 
   std::vector<GameObject> defenders;
   std::vector<DefenderShoot> defenderShoots;
+  CannonSmoke cannonSmoke;
 
-  GameObject knightModel(&knightClass, Vector<3>{0.0f, 0.0f, 0.0f});
-  knightModel.setIdleAnimations({"knightWalk"});
-  KnightInstance knight = makeKnight(curveCache);
+  std::vector<KnightInstance> walkingKnights;
+  std::vector<GameObject>     walkingKnightModels;
 
   KnightWeaponTweaks weaponTweaks;
 
@@ -662,11 +702,7 @@ Mesh shieldMesh(shieldVertices);
   DirectionalLight moonLight = makeMoonLight();
 
   Camera cam;
-  // Estado da câmera Livre: só mutado por processInput (WASD/space/shift).
-  // Aérea e Orbital derivam sua posição em locais separados, preservando este.
   Vector<3> cameraPosition{0.0f, 2.0f, 5.0f};
-  // Posição efetiva da câmera no mundo neste frame (usada por shaders e raios).
-  Vector<3> viewPos = cameraPosition;
   Matrix<4, 4> identity = Matrix<4, 4>::identity();
 
   // ---------------------------------------------------------------------------
@@ -763,10 +799,40 @@ Mesh shieldMesh(shieldVertices);
         defenders, defenderShoots, enemies, enemyTicks, deltaTime);
     for (int n = 0; n < fireResult.archerFired;   ++n) audio::playOneShot(kArcherShots[std::rand() % 2]);
     for (int n = 0; n < fireResult.arquebusFired; ++n) audio::playOneShot(kArquebusShots[std::rand() % 2]);
+    for (int n = 0; n < fireResult.cannonFired;   ++n) audio::playOneShot("data/audio/cannon1.mp3");
+    for (const auto &pos : fireResult.cannonShotPositions)  cannonSmoke.emit(pos, 10, 1.0f);
+    for (const auto &pos : fireResult.arquebusShotPositions) cannonSmoke.emit(pos, 4, 0.35f);
+    cannonSmoke.update(deltaTime);
 
-    KnightTickResult knightTick = updateKnight(
-        knight, knightModel, enemies, enemyTicks, curvePoints, curveCache, deltaTime);
-    if (knightTick.hitThisFrame)  audio::playOneShot("data/audio/knight_hit.mp3");
+    // Invocações dos comandantes de cavaleiros
+    for (int n = 0; n < fireResult.knightSummoned; ++n) {
+      walkingKnights.push_back(makeKnight(curveCache));
+      walkingKnightModels.emplace_back(&knightClass, Vector<3>{0.0f, 0.0f, 0.0f});
+      walkingKnightModels.back().setIdleAnimations({"knightWalk"});
+      walkingKnightModels.back().setAnimation("knightWalk");
+    }
+    static const char *kChargeShots[] = {
+        "data/audio/charge1.mp3", "data/audio/charge2.mp3", "data/audio/charge3.mp3",
+        "data/audio/charge4.mp3", "data/audio/charge5.mp3", "data/audio/charge6.mp3",
+    };
+    for (int n = 0; n < fireResult.chargePlayed; ++n)
+      audio::playOneShot(kChargeShots[std::rand() % 6]);
+
+    // Atualiza cavaleiros em campo
+    std::vector<KnightTickResult> walkingKnightTicks;
+    for (int i = 0; i < (int)walkingKnights.size(); ) {
+      if (!walkingKnights[i].alive && !walkingKnights[i].dying) {
+        walkingKnights.erase(walkingKnights.begin() + i);
+        walkingKnightModels.erase(walkingKnightModels.begin() + i);
+        continue;
+      }
+      KnightTickResult tick = updateKnight(
+          walkingKnights[i], walkingKnightModels[i],
+          enemies, enemyTicks, curvePoints, curveCache, deltaTime);
+      if (tick.hitThisFrame) audio::playOneShot("data/audio/knight_hit.mp3");
+      walkingKnightTicks.push_back(tick);
+      ++i;
+    }
     // ------- INPUT por frame -------
     processInput(window, cameraPosition, deltaTime);
 
@@ -777,24 +843,35 @@ Mesh shieldMesh(shieldVertices);
     const float aspect = static_cast<float>(state.fbWidth) / static_cast<float>(state.fbHeight);
     cam.setPerspective(kFovDegrees * math_constants::kDegToRad, aspect, kNearPlane, kFarPlane);
 
-    if (state.cameraMode == CameraMode::Free) {
+    if (state.useFreeCamera) {
       cam.setFPS(cameraPosition, state.yaw, state.pitch);
-      viewPos = cameraPosition;
-    } else if (state.cameraMode == CameraMode::Aerial) {
-      // Look-at fixa no alto, olhando direto para baixo
-      viewPos = Vector<3>{0.0f, 22.0f, 0.01f};
-      cam.setLookAt(viewPos, Vector<3>{0.0f, 0.0f, 0.0f});
-    } else {  // Orbital
-      updateOrbitalCameraPosition(state, viewPos);
-      cam.setLookAt(viewPos, state.orbitTarget);
+    } else {
+      updateOrbitalCameraPosition(state, cameraPosition);
+      Vector<3> lookTarget{0.0f, 0.0f, 0.0f};
+      cam.setLookAt(cameraPosition, lookTarget);
     }
 
     auto glView = toOpenGLMatrix(cam.getViewMatrix());
     auto glProj = toOpenGLMatrix(cam.getProjectionMatrix());
-    const glm::vec3 glmViewPos(viewPos[0], viewPos[1], viewPos[2]);
+    const glm::vec3 glmViewPos(cameraPosition[0], cameraPosition[1], cameraPosition[2]);
+
+    // Constrói lista de luzes combinada (lanternas + tochas dos canhoneiros).
+    std::vector<PointLight> allLights = lanternLights;
+    for (const auto &unit : defenders) {
+      if (unit.type != defender_types::kCannon) continue;
+      if (allLights.size() >= static_cast<size_t>(kMaxPointLights)) break;
+      const float bkX = std::sin(unit.rotationY);
+      const float bkZ = -std::cos(unit.rotationY);
+      PointLight tl;
+      tl.position = glm::vec3(unit.position[0] + bkX * kCannonerBehindOffset,
+                              unit.position[1] + kLanternLightHeight,
+                              unit.position[2] + bkZ * kCannonerBehindOffset);
+      tl.color = kLanternLightColor;
+      allLights.push_back(tl);
+    }
 
     // ------- RENDER: entidades animadas (inimigo + defensores) -------
-    uploadCommonUniforms(pipe.animShader, moonLight, lanternLights, glmViewPos, glView, glProj);
+    uploadCommonUniforms(pipe.animShader, moonLight, allLights, glmViewPos, glView, glProj);
     glUniform1f(glGetUniformLocation(pipe.animShader, "hitFlash"), 0.0f);
     for (int i = 0; i < kMaxEnemies; ++i) {
       auto &e = enemies[i];
@@ -806,18 +883,23 @@ Mesh shieldMesh(shieldVertices);
                   eTex, tex.defaultNormal);
     }
 
-      if (knight.alive || knight.dying) {
-      renderKnight(pipe.animShader, knightModel, knightTick.position,
-                   knightTick.angle, tex.knightColor, tex.knightNormal);
+    for (int i = 0; i < (int)walkingKnights.size(); ++i) {
+      if (!walkingKnights[i].alive && !walkingKnights[i].dying) continue;
+      renderKnight(pipe.animShader, walkingKnightModels[i],
+                   walkingKnightTicks[i].position, walkingKnightTicks[i].angle,
+                   tex.knightColor, tex.knightNormal);
     }
 
     renderDefenders(pipe.animShader, defenders, tex.archerColor, tex.archerNormal);
 
     // ------- RENDER: armas dos defensores + castelo -------
-    uploadCommonUniforms(pipe.objShader, moonLight, lanternLights, glmViewPos, glView, glProj);
-    renderDefenderWeapons(pipe.objShader, pipe.objU, defenders, bowMesh, tex.bowColor);
-    if (knight.alive || knight.dying) {
-      renderKnightWeapons(pipe.objShader, pipe.objU, knightModel,
+    uploadCommonUniforms(pipe.objShader, moonLight, allLights, glmViewPos, glView, glProj);
+    renderDefenderWeapons(pipe.objShader, pipe.objU, defenders,
+                          bowMesh, tex.bowColor, torchMesh, tex.torchColor);
+    renderCannonBarrels(pipe.objShader, pipe.objU, defenders, cannonBarrelMesh, tex.cannonBarrelColor);
+    for (int i = 0; i < (int)walkingKnights.size(); ++i) {
+      if (!walkingKnights[i].alive && !walkingKnights[i].dying) continue;
+      renderKnightWeapons(pipe.objShader, pipe.objU, walkingKnightModels[i],
                           swordMesh, tex.swordColor,
                           shieldMesh, tex.shieldColor,
                           weaponTweaks);
@@ -826,17 +908,18 @@ Mesh shieldMesh(shieldVertices);
                  curvePoints);
 
     // ------- RENDER: chão de grama -------
-    uploadCommonUniforms(pipe.groundShader, moonLight, lanternLights, glmViewPos, glView, glProj);
+    uploadCommonUniforms(pipe.groundShader, moonLight, allLights, glmViewPos, glView, glProj);
     renderGround(grassMesh, tex.grass, tex.noise);
 
     // ------- RENDER: árvores -------
-    uploadCommonUniforms(pipe.objShader, moonLight, lanternLights, glmViewPos, glView, glProj);
+    uploadCommonUniforms(pipe.objShader, moonLight, allLights, glmViewPos, glView, glProj);
     renderTrees(pipe.objShader, pipe.objU, trees,
                 treeLogMesh.get(), tex.treeLog,
                 treeLeavesMesh.get(), tex.treeLeaves);
 
     // ------- RENDER: círculo de range (azul) -------
-    if (selectedTroopIndex >= 0 && selectedTroopIndex < static_cast<int>(defenders.size())) {
+    if (selectedTroopIndex >= 0 && selectedTroopIndex < static_cast<int>(defenders.size()) &&
+        defenders[selectedTroopIndex].type != defender_types::kKnight) {
       const GameObject &sel = defenders[selectedTroopIndex];
       float r = sel.range;
       auto glRangeModel = toOpenGLMatrix(
@@ -882,7 +965,7 @@ Mesh shieldMesh(shieldVertices);
 
     // ------- RENDER: lanternas -------
     if (lanternMesh) {
-      uploadCommonUniforms(pipe.lanternShader, moonLight, lanternLights, glmViewPos, glView, glProj);
+      uploadCommonUniforms(pipe.lanternShader, moonLight, allLights, glmViewPos, glView, glProj);
       renderLanterns(pipe.lanternU, lanterns, *lanternMesh, tex.lantern);
     }
 
@@ -909,8 +992,9 @@ Mesh shieldMesh(shieldVertices);
     // ------- RENDER: preview de posicionamento de tropa -------
     if (state.isPlacingTroop) {
       TroopPlacementContext ctx{
-          window, cam, viewPos, curvePoints, pipe.previewShader,
-          archerClass, arquebusClass, defenders, defenderShoots,
+          window, cam, cameraPosition, curvePoints, pipe.previewShader,
+          archerClass, arquebusClass, cannonClass, knightClass,
+          defenders, defenderShoots,
           glView.data(), glProj.data(),
       };
       handleTroopPlacement(ctx, state, deltaTime);
@@ -918,7 +1002,14 @@ Mesh shieldMesh(shieldVertices);
 
     // ------- SELEÇÃO DE TROPA (clique no mundo) -------
     selectedTroopIndex = troop_selection::update(
-        window, cam, viewPos, defenders, state, selectedTroopIndex);
+        window, cam, cameraPosition, defenders, state, selectedTroopIndex);
+
+    // ------- RENDER: fumaça dos canhões -------
+    {
+      const glm::vec3 camRight(glView[0], glView[4], glView[8]);
+      const glm::vec3 camUp   (glView[1], glView[5], glView[9]);
+      cannonSmoke.render(pipe.particleShader, tex.smokeTexture, camRight, camUp, glView, glProj);
+    }
 
     // ------- HUD + janela de upgrade (ImGui frame manual aqui pra empilhar) -------
     const float currentFps = 1.0f / deltaTime;
@@ -960,8 +1051,8 @@ Mesh shieldMesh(shieldVertices);
 
         // Projeta pés (Y=0) e cabeça (Y=kH) e verifica se o mouse está dentro
         // do retângulo de tela com padding horizontal kPad.
-        const float kH   = 1.7f;   // Altura aproximada do personagem em unidades do mundo
-        const float kPad = 25.0f;  // Padding horizontal em pixels
+        const float kH   = 1.7f;   // altura aproximada do personagem em unidades do mundo
+        const float kPad = 25.0f;  // padding horizontal em pixels
         auto overModel = [&](float wx, float wz) -> bool {
           auto [sFoot, okF] = worldToScreen(wx, 0.0f, wz);
           auto [sHead, okH] = worldToScreen(wx, kH,   wz);
@@ -976,10 +1067,13 @@ Mesh shieldMesh(shieldVertices);
 
         bool showed = false;
 
-        // Defensores colocados no mapa (arqueiro / arcabuzeiro)
+        // Defensores colocados no mapa
         for (const auto &def : defenders) {
           if (!overModel(def.position[0], def.position[2])) continue;
-          const char *nome = (def.type == defender_types::kArcher) ? "Arqueiro" : "Arcabuzeiro";
+          const char *nome = (def.type == defender_types::kArcher)   ? "Arqueiro"
+                           : (def.type == defender_types::kCannon)   ? "Canhoneiro"
+                           : (def.type == defender_types::kKnight)   ? "Comandante"
+                                                                     : "Arcabuzeiro";
           ImGui::BeginTooltip();
           ImGui::Text("%s (N\xc3\xadvel %d)", nome, def.level);
           ImGui::EndTooltip();
@@ -987,13 +1081,14 @@ Mesh shieldMesh(shieldVertices);
           break;
         }
 
-        // Cavaleiro (entidade separada dos defensores)
-        if (!showed && (knight.alive || knight.dying)
-            && overModel(knightTick.position[0], knightTick.position[2])) {
+        // Cavaleiros em campo (invocados)
+        for (int i = 0; i < (int)walkingKnights.size() && !showed; ++i) {
+          if (!walkingKnights[i].alive && !walkingKnights[i].dying) continue;
+          if (!overModel(walkingKnightTicks[i].position[0], walkingKnightTicks[i].position[2])) continue;
           ImGui::BeginTooltip();
           ImGui::Text("Cavaleiro");
           ImGui::Separator();
-          ImGui::Text("Vida: %d / %d", knight.hp, knight.maxHp);
+          ImGui::Text("Vida: %d / %d", walkingKnights[i].hp, walkingKnights[i].maxHp);
           ImGui::EndTooltip();
           showed = true;
         }
@@ -1029,6 +1124,8 @@ Mesh shieldMesh(shieldVertices);
   glDeleteTextures(1, &uiTextures.healthIcon);
   glDeleteTextures(1, &uiTextures.archerIcon);
   glDeleteTextures(1, &uiTextures.arquebusIcon);
+  glDeleteTextures(1, &uiTextures.cannonIcon);
+  glDeleteTextures(1, &uiTextures.knightIcon);
   glDeleteTextures(1, &uiTextures.zombiePortrait);
   glDeleteVertexArrays(1, &rangeCircleVAO);
   glDeleteBuffers(1, &rangeCircleVBO);
