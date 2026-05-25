@@ -843,9 +843,13 @@ Mesh shieldMesh(shieldVertices);
     const float aspect = static_cast<float>(state.fbWidth) / static_cast<float>(state.fbHeight);
     cam.setPerspective(kFovDegrees * math_constants::kDegToRad, aspect, kNearPlane, kFarPlane);
 
-    if (state.useFreeCamera) {
+    if (state.cameraMode == CameraMode::Free) {
       cam.setFPS(cameraPosition, state.yaw, state.pitch);
+    } else if (state.cameraMode == CameraMode::Orbital) {
+      updateOrbitalCameraPosition(state, cameraPosition);
+      cam.setLookAt(cameraPosition, state.orbitTarget);
     } else {
+      // Aerial: orbita em torno da origem com target fixo no centro
       updateOrbitalCameraPosition(state, cameraPosition);
       Vector<3> lookTarget{0.0f, 0.0f, 0.0f};
       cam.setLookAt(cameraPosition, lookTarget);
