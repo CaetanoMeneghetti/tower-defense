@@ -25,6 +25,10 @@ struct AppState {
   bool isPlacingTroop = false;
   int selectedTroopType = 0;
 
+  // ---- Desenho de feitiço ----
+  // Quando true: câmera/seleção/placement ficam congelados; F sai.
+  bool isDrawingSpell = false;
+
   // ---- Câmera (modo) ----
   CameraMode cameraMode = CameraMode::Free;
   bool cPressed = false;

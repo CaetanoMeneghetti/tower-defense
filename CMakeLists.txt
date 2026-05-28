@@ -47,6 +47,11 @@ set(SOURCES
   # world — geração procedural do caminho de terra
   src/world/path_generator.cpp
 
+  # spell — desenho + classificação por CNN
+  src/spell/canvas.cpp
+  src/spell/shape_classifier.cpp
+  src/spell/spell_mode.cpp
+
   # utils / 3rd-party
   src/utils/glad.c
   src/imgui/imgui.cpp

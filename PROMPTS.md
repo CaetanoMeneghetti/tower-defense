@@ -122,3 +122,26 @@ Resultado: Campos dying e deathTimer adicionados ao KnightInstance. Quando HP ch
 
 Resultado: Os shaders line.vert e line.frag receberam os uniforms mat4 model e vec4 lineColor. A struct LineUniforms ganhou os campos model e color. Um VAO com 64 vértices em GL_LINE_LOOP no plano XZ com raio 1.0 é gerado uma vez na inicialização com glGenVertexArrays e glBufferData. No draw, a model matrix é translate(troopPos) × scale(troop.range, 1, troop.range), resultando num círculo que acompanha automaticamente os upgrades de alcance via o campo range do GameObject.
 
+---
+
+**PROMPT**: Preciso de um canvas 2D em memória como array plano de floats (fundo=1.0, traço=0.0), tamanho fixo 50x50. Quero funções `clear`, `plot` (marca o pixel e seus 4 vizinhos para dar espessura) e `drawLine` com Bresenham.
+
+Resultado: Funções `clear`, `plot` e `drawLine` em *canvas.cpp*. `plot` expande cada ponto para uma cruz de 5 pixels para dar espessura; `drawLine` usa Bresenham para conectar dois pixels sem buracos.
+
+---
+
+**PROMPT**: Preciso carregar os pesos de uma CNN de um arquivo .bin de floats em modo binário. A contagem exata de floats é conhecida em tempo de compilação; se o arquivo divergir, quero erro claro. Os ponteiros para cada camada devem ser fatiados a partir de um único buffer contíguo, sem cópias.
+
+Resultado: Método `ShapeClassifier::load` em *shape_classifier.cpp*. Lê o arquivo inteiro em um único buffer e fatia ponteiros para cada camada a partir dele, sem cópias.
+
+---
+
+**PROMPT**: Tenho traços coletados em coordenadas de tela. Preciso rasterizá-los para um canvas 50x50 de forma que o desenho ocupe quase todo o quadro. Calcule o bounding box, expanda para um quadrado com padding configurável e mapeie as coordenadas de tela para o canvas usando esse quadrado como referência.
+
+Resultado: Função `rasterizeStrokes` em *spell_mode.cpp*. Calcula o bounding box de todos os traços, expande para um quadrado com padding e mapeia as coordenadas de tela para o canvas 50x50.
+
+---
+
+**PROMPT**: Preciso de um modo de desenho de feitiço que congele câmera e gameplay enquanto ativo. F (borda de subida) togla o modo; LMB acumula traços; ENTER rasteriza, classifica e salva um .pgm de debug em captures/. O render deve desenhar os traços sobre a cena com ImGui foreground draw list, mostrar dica de teclas, e quando houver resultado exibir uma janelinha com classe, confiança e probabilidades, mais um crop 150×150 do input da CNN.
+
+Resultado: Funções `init`, `update` e `render` em *spell_mode.cpp*. `update` gerencia o toggle do modo, a coleta de traços e a classificação ao pressionar ENTER. `render` sobrepõe os traços na cena e exibe janela de resultado com crop do input da CNN.

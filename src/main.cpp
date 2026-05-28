@@ -57,6 +57,10 @@
 #include "input/camera_controller.h"
 #include "input/input_handler.h"
 
+// ---- spell ----
+#include "spell/shape_classifier.h"
+#include "spell/spell_mode.h"
+
 // ---- render ----
 #include "render/particle_system.h"
 #include "render/render_constants.h"
@@ -453,7 +457,7 @@ int run(GLFWwindow *window) {
     m->loadAnimation("fire",   "data/models/arquebus/arquebus_fire.glb");
     m->loadAnimation("reload", "data/models/arquebus/arquebus_reload.glb");
   }
-  
+
   // Arqueiro — 5 tiers (sistema de upgrade)
   AnimatedModel archerBase("data/models/archer/archer_t.glb");
   archerBase.loadAnimation("idle1", "data/models/archer/idle1.glb");
@@ -701,6 +705,14 @@ Mesh shieldMesh(shieldVertices);
 
   DirectionalLight moonLight = makeMoonLight();
 
+  // ---------------------------------------------------------------------------
+  // Spell mode (desenho + CNN) — carrega pesos uma vez.
+  // ---------------------------------------------------------------------------
+  spell::ShapeClassifier spellClassifier;
+  spellClassifier.load("data/shape_classifier_weights.bin");
+  spell::SpellMode spellMode;
+  spell::init(spellMode);
+
   Camera cam;
   Vector<3> cameraPosition{0.0f, 2.0f, 5.0f};
   Matrix<4, 4> identity = Matrix<4, 4>::identity();
@@ -835,6 +847,7 @@ Mesh shieldMesh(shieldVertices);
     }
     // ------- INPUT por frame -------
     processInput(window, cameraPosition, deltaTime);
+    spell::update(spellMode, state, window, spellClassifier);
 
     // ------- Clear + camera setup -------
     glClearColor(kFogColor.r, kFogColor.g, kFogColor.b, 1.0f);
@@ -994,7 +1007,7 @@ Mesh shieldMesh(shieldVertices);
     }
 
     // ------- RENDER: preview de posicionamento de tropa -------
-    if (state.isPlacingTroop) {
+    if (state.isPlacingTroop && !state.isDrawingSpell) {
       TroopPlacementContext ctx{
           window, cam, cameraPosition, curvePoints, pipe.previewShader,
           archerClass, arquebusClass, cannonClass, knightClass,
@@ -1023,6 +1036,8 @@ Mesh shieldMesh(shieldVertices);
 
     gameHud.render(state, waveState, currentFps);
 
+    // Canvas overlay + janela de resultado da classificação (se houver).
+    spell::render(spellMode, state);
 
     if (selectedTroopIndex >= 0 && selectedTroopIndex < static_cast<int>(defenders.size())) {
       GameObject &troop = defenders[selectedTroopIndex];

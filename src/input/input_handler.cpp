@@ -17,7 +17,7 @@ namespace {
 
 void mouseCallback(GLFWwindow *window, double xPosIn, double yPosIn) {
   AppState &s = stateFromWindow(window);
-  if (s.cameraMode != CameraMode::Free) {
+  if (s.cameraMode != CameraMode::Free || s.isDrawingSpell) {
     return;
   }
 
@@ -87,6 +87,9 @@ void processInput(GLFWwindow *window, Vector<3> &cameraPosition, float deltaTime
   if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
     glfwSetWindowShouldClose(window, true);
   }
+
+  // Modo desenho de feitiço congela câmera e atalhos de gameplay.
+  if (s.isDrawingSpell) return;
 
   if (s.cameraMode == CameraMode::Free) {
     const float speed = kFreeCameraSpeed * deltaTime;

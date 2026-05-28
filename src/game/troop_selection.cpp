@@ -18,7 +18,7 @@ int update(GLFWwindow *window,
            int currentSelectedIndex) {
   int selected = currentSelectedIndex;
   ImGuiIO &io = ImGui::GetIO();
-  if (state.isPlacingTroop || io.WantCaptureMouse) {
+  if (state.isPlacingTroop || state.isDrawingSpell || io.WantCaptureMouse) {
     return selected;
   }
 
