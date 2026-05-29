@@ -31,10 +31,13 @@ constexpr int kTreeCount = 1000;
 constexpr int kMaxTreeAttempts = kTreeCount * 40;
 
 // ---- Lanternas ----
-constexpr int kLanternCount = 8;
+// Distância de arco entre duas lanternas consecutivas no mesmo lado.
+// A contagem total é derivada de (totalArcLength / kLanternSpacing) * 2,
+// cappada em (kMaxPointLights - 4) para reservar slots para tochas de canhão.
+constexpr float kLanternSpacing = 12.0f;
 constexpr float kLanternScale = 0.01f;
-// Distância do centro do path; path tem meia-largura 2.0, então fica na grama.
-constexpr float kLanternPathOffset = 2.8f;
+// Distância do centro do path; path tem meia-largura 2.0 + ruído máx 0.4 = 2.4.
+constexpr float kLanternPathOffset = 3.2f;
 // Altura aproximada do bulbo/chama em world units (já escalado).
 // BBox do OBJ: Y ∈ [-5, 85]cm; bulbo no meio ~ y=45cm → 0.9 world units.
 constexpr float kLanternLightHeight = 0.9f;

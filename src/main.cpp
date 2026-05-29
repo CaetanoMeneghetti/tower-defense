@@ -265,11 +265,11 @@ SceneTextures loadAllSceneTextures() {
   t.arquebusNormal     = loadTexture("data/textures/arquebus_normal.png");
   t.arquebusWeapon     = loadTexture("data/textures/arquebus_weapon.png");
 
-  t.swordColor  = loadTexture("data/textures/knightattachment.png");
-  t.shieldColor = loadTexture("data/textures/knightattachment.png");
+  t.swordColor  = loadTexture("data/textures/knight_attachment.png");
+  t.shieldColor = loadTexture("data/textures/knight_attachment.png");
 
   t.knightColor  = loadTexture("data/textures/knight.png");
-  t.knightNormal = loadTexture("data/textures/knightnormal.png");
+  t.knightNormal = loadTexture("data/textures/knight_normal.png");
 
   t.castleColor        = loadTexture("data/textures/castle.png");
   t.castleNormal       = loadTexture("data/textures/castle_normal.png");
@@ -277,8 +277,8 @@ SceneTextures loadAllSceneTextures() {
   t.treeLog            = loadTexture("data/textures/log.jpeg");
   t.treeLeaves         = loadTexture("data/textures/leaves.png", 4);
 
-  t.selectionCircle    = loadTexture("data/textures/selectioncircle.png", 4);
-  t.armoredZombieColor = loadTexture("data/textures/armorzombie.png", 4);
+  t.selectionCircle    = loadTexture("data/textures/selection_circle.png", 4);
+  t.armoredZombieColor = loadTexture("data/textures/armor_zombie.png", 4);
 
   t.cannonerColor      = loadTexture("data/textures/cannoner.png");
   t.cannonerNormal     = loadTexture("data/textures/cannoner_normal.png");
@@ -312,16 +312,19 @@ void deleteAllSceneTextures(const SceneTextures &t) {
 // =============================================================================
 // PONTOS DE CONTROLE DA CURVA (path do nível)
 // =============================================================================
-// Simula f(x) = x * cos(x), x ∈ [-2, 2] -> [-10, 10] em 20 pontos.
+// f(x) = 10*sin(0.20x + 0.3) + 3*sin(0.40x - 0.5), x ∈ [-22, 22] em 28 pontos.
 std::vector<Point> defaultControlPoints() {
   return {
-      {-10.0000f, -4.1615f}, {-8.9474f, -1.9551f}, {-7.8947f, -0.0643f},
-      {-6.8421f, 1.3658f},   {-5.7895f, 2.3234f},  {-4.7368f, 2.7654f},
-      {-3.6842f, 2.7286f},   {-2.6316f, 2.2750f},  {-1.5789f, 1.5009f},
-      {-0.5263f, 0.5234f},   {0.5263f, -0.5234f},  {1.5789f, -1.5009f},
-      {2.6316f, -2.2750f},   {3.6842f, -2.7286f},  {4.7368f, -2.7654f},
-      {5.7895f, -2.3234f},   {6.8421f, -1.3658f},  {7.8947f, 0.0643f},
-      {8.9474f, 1.9551f},    {10.0000f, 4.1615f},
+      {-22.0000f,  7.8094f}, {-20.3704f,  3.8088f}, {-18.7407f,  0.0481f},
+      {-17.1111f, -2.8126f}, {-15.4815f, -4.5790f}, {-13.8519f, -5.4992f},
+      {-12.2222f, -6.0600f}, {-10.5926f, -6.6956f}, { -8.9630f, -7.5404f},
+      { -7.3333f, -8.3316f}, { -5.7037f, -8.5085f}, { -4.0741f, -7.4674f},
+      { -2.4444f, -4.8647f}, { -0.8148f, -0.8394f}, {  0.8148f,  3.9464f},
+      {  2.4444f,  8.4751f}, {  3.4741f, 11.6911f}, {  5.7037f, 12.8492f},
+      {  7.9333f, 11.7603f}, {  8.9630f,  8.8384f}, { 10.5926f,  4.9343f},
+      { 12.2222f,  1.0235f}, { 13.8519f, -2.1281f}, { 15.4815f, -4.1901f},
+      { 17.1111f, -5.3018f}, { 18.7407f, -5.9113f}, { 20.3704f, -6.4965f},
+      { 22.0000f, -7.2927f},
   };
 }
 
@@ -394,6 +397,7 @@ int run(GLFWwindow *window) {
 
   AppState state;
   glfwSetWindowUserPointer(window, &state);
+  glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
   glfwGetFramebufferSize(window, &state.fbWidth, &state.fbHeight);
   glViewport(0, 0, state.fbWidth, state.fbHeight);
@@ -857,15 +861,18 @@ Mesh shieldMesh(shieldVertices);
     cam.setPerspective(kFovDegrees * math_constants::kDegToRad, aspect, kNearPlane, kFarPlane);
 
     if (state.cameraMode == CameraMode::Free) {
+      cam.setUp(Vector<3>{0.0f, 1.0f, 0.0f});
       cam.setFPS(cameraPosition, state.yaw, state.pitch);
     } else if (state.cameraMode == CameraMode::Orbital) {
+      cam.setUp(Vector<3>{0.0f, 1.0f, 0.0f});
       updateOrbitalCameraPosition(state, cameraPosition);
       cam.setLookAt(cameraPosition, state.orbitTarget);
     } else {
-      // Aerial: orbita em torno da origem com target fixo no centro
-      updateOrbitalCameraPosition(state, cameraPosition);
-      Vector<3> lookTarget{0.0f, 0.0f, 0.0f};
-      cam.setLookAt(cameraPosition, lookTarget);
+      // Aerial: posição fixa no alto, olhando direto para baixo.
+      // up = (0,0,-1): eixo -Z aponta para cima na tela (norte do mapa).
+      cameraPosition = Vector<3>{0.0f, 25.0f, 0.0f};
+      cam.setUp(Vector<3>{0.0f, 0.0f, -1.0f});
+      cam.setLookAt(cameraPosition, Vector<3>{0.0f, 0.0f, 0.0f});
     }
 
     auto glView = toOpenGLMatrix(cam.getViewMatrix());

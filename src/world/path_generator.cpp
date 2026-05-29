@@ -38,14 +38,18 @@ Mesh generatePathMesh(const std::vector<Point> &centerPoints, float baseWidth) {
     Point current = centerPoints[i];
     Point dir;
 
-    // 1.1 Calcula o vetor direção (Tangente) apontando para o próximo ponto
-    if (i < centerPoints.size() - 1) {
-      dir.x = centerPoints[i + 1].x - current.x;
-      dir.y = centerPoints[i + 1].y - current.y;
-    } else {
-      // Se for o último ponto, mantém a direção do segmento anterior
+    // 1.1 Calcula o vetor direção (Tangente)
+    // Pontos internos usam diferença central (média bidirecional) para suavizar
+    // a perpendicular nas curvas e evitar quads auto-intersectantes.
+    if (i == 0) {
+      dir.x = centerPoints[1].x - current.x;
+      dir.y = centerPoints[1].y - current.y;
+    } else if (i == centerPoints.size() - 1) {
       dir.x = current.x - centerPoints[i - 1].x;
       dir.y = current.y - centerPoints[i - 1].y;
+    } else {
+      dir.x = centerPoints[i + 1].x - centerPoints[i - 1].x;
+      dir.y = centerPoints[i + 1].y - centerPoints[i - 1].y;
     }
 
     // Normaliza o vetor direção para ter tamanho exatamente 1

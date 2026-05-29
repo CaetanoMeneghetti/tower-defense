@@ -44,6 +44,10 @@ void Camera::setPosition(const Vector<3> &pos) {
   position_ = pos;
 }
 
+void Camera::setUp(const Vector<3> &up) {
+  up_ = up;
+}
+
 void Camera::setPerspective(float fov, float aspect, float near, float far) {
   fov_ = fov;
   aspect_ = aspect;

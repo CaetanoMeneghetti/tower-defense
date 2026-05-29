@@ -4,6 +4,7 @@
 #include <ctime>
 #include <random>
 
+#include "engine/lighting.h"
 #include "game/game_constants.h"
 #include "math/constants.h"
 
@@ -61,20 +62,23 @@ std::vector<LanternInstance> placeLanterns(const std::vector<Point> &curvePoints
   using namespace game_constants;
 
   std::vector<LanternInstance> lanterns;
-  lanterns.reserve(kLanternCount);
   outLanternLights.clear();
-  outLanternLights.reserve(kLanternCount);
 
   if (curveCache.totalDistance <= 0.0f) {
     return lanterns;
   }
 
-  // Duas sequências interleaved: kLanternCount/2 lanternas em cada lado, com
-  // espaçamento próprio uniforme. Lado direito sai 0.5 spacing à frente do
-  // esquerdo para o efeito zigue-zague — evita aglomeração nas curvas.
-  const int perSide = kLanternCount / 2;
+  // Conta derivada do comprimento do path: uma lanterna a cada kLanternSpacing
+  // unidades de arco por lado, cappada para não consumir todos os slots de luz.
+  const int maxPerSide = (kMaxPointLights - 4) / 2;
+  const int perSide = std::min(maxPerSide,
+      std::max(1, static_cast<int>(curveCache.totalDistance / kLanternSpacing)));
+  const int totalCount = perSide * 2;
   const float spacing = curveCache.totalDistance / static_cast<float>(perSide);
-  for (int i = 0; i < kLanternCount; ++i) {
+
+  lanterns.reserve(totalCount);
+  outLanternLights.reserve(totalCount);
+  for (int i = 0; i < totalCount; ++i) {
     const int sideIdx = i / 2;
     const bool isLeft = (i % 2 == 0);
     const float phase = isLeft ? 0.25f : 0.75f;

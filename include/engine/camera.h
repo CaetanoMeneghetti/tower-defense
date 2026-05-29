@@ -18,6 +18,7 @@ class Camera {
   Camera();
 
   void setPosition(const Vector<3> &pos);
+  void setUp(const Vector<3> &up);
   void setLookAt(const Vector<3> &pos, const Vector<3> &target);
   void setPerspective(float fov, float aspect, float nearPlane, float farPlane);
   void setFPS(const Vector<3> &pos, float yaw, float pitch);
