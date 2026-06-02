@@ -12,11 +12,15 @@ namespace game_constants {
 
 // ---- Câmera ----
 constexpr float kMouseSensitivity = 0.005f;
-constexpr float kFreeCameraSpeed = 5.0f;
+constexpr float kFreeCameraSpeed = 8.0f;
 constexpr float kOrbitalAngularSpeed = 2.0f;
 constexpr float kMaxPitchRad = 89.0f * math_constants::kDegToRad;
 constexpr float kMinOrbitalRadius = 1.0f;
 constexpr float kMaxOrbitalRadius = 50.0f;
+// Câmera aérea: altura fixa e deslocamento (pan) no plano XZ.
+constexpr float kAerialCameraHeight = 40.0f;   // altura da câmera olhando para baixo
+constexpr float kAerialPanSpeed     = 18.0f;   // velocidade do pan (unidades/seg)
+constexpr float kAerialPanLimit     = 30.0f;   // deslocamento máx. a partir do centro
 
 // ---- Mapa / Path ----
 constexpr float kMapHalfSize = 200.0f;
@@ -62,6 +66,7 @@ constexpr float kCannonRange         = 12.0f;
 constexpr float kCannonFireDuration  = 1.2f;   // duração da animação de disparo
 constexpr float kCannonCowerDuration = 2.0f;   // duração da animação de encolhimento
 constexpr int   kCannonDamage        = 40;
+constexpr float kCannonSplashRadius  = 3.0f;   // raio do dano em área do disparo do canhão
 constexpr float kCannonBarrelOffset  = 1.0f;   // origem do mesh cannon.obj à frente do canhoneiro
 constexpr float kCannonBarrelScale   = 0.45f;  // escala do mesh cannon.obj
 constexpr float kCannonerBehindOffset = 0.7f;  // quanto o canhoneiro recua do ponto lógico

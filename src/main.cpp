@@ -860,24 +860,28 @@ Mesh shieldMesh(shieldVertices);
     const float aspect = static_cast<float>(state.fbWidth) / static_cast<float>(state.fbHeight);
     cam.setPerspective(kFovDegrees * math_constants::kDegToRad, aspect, kNearPlane, kFarPlane);
 
+    // Posição usada para render/picking neste frame. `cameraPosition` guarda o
+    // estado PERSISTENTE da câmera livre; aéreo/orbital derivam uma posição
+    // própria sem sobrescrevê-lo, para a livre voltar de onde parou.
+    Vector<3> renderCameraPos = cameraPosition;
     if (state.cameraMode == CameraMode::Free) {
       cam.setUp(Vector<3>{0.0f, 1.0f, 0.0f});
       cam.setFPS(cameraPosition, state.yaw, state.pitch);
     } else if (state.cameraMode == CameraMode::Orbital) {
       cam.setUp(Vector<3>{0.0f, 1.0f, 0.0f});
-      updateOrbitalCameraPosition(state, cameraPosition);
-      cam.setLookAt(cameraPosition, state.orbitTarget);
+      updateOrbitalCameraPosition(state, renderCameraPos);
+      cam.setLookAt(renderCameraPos, state.orbitTarget);
     } else {
-      // Aerial: posição fixa no alto, olhando direto para baixo.
+      // Aerial: alto, olhando direto para baixo; pan no plano XZ (WASD).
       // up = (0,0,-1): eixo -Z aponta para cima na tela (norte do mapa).
-      cameraPosition = Vector<3>{0.0f, 25.0f, 0.0f};
+      renderCameraPos = Vector<3>{state.aerialPanX, kAerialCameraHeight, state.aerialPanZ};
       cam.setUp(Vector<3>{0.0f, 0.0f, -1.0f});
-      cam.setLookAt(cameraPosition, Vector<3>{0.0f, 0.0f, 0.0f});
+      cam.setLookAt(renderCameraPos, Vector<3>{state.aerialPanX, 0.0f, state.aerialPanZ});
     }
 
     auto glView = toOpenGLMatrix(cam.getViewMatrix());
     auto glProj = toOpenGLMatrix(cam.getProjectionMatrix());
-    const glm::vec3 glmViewPos(cameraPosition[0], cameraPosition[1], cameraPosition[2]);
+    const glm::vec3 glmViewPos(renderCameraPos[0], renderCameraPos[1], renderCameraPos[2]);
 
     // Constrói lista de luzes combinada (lanternas + tochas dos canhoneiros).
     std::vector<PointLight> allLights = lanternLights;
@@ -1016,7 +1020,7 @@ Mesh shieldMesh(shieldVertices);
     // ------- RENDER: preview de posicionamento de tropa -------
     if (state.isPlacingTroop && !state.isDrawingSpell) {
       TroopPlacementContext ctx{
-          window, cam, cameraPosition, curvePoints, pipe.previewShader,
+          window, cam, renderCameraPos, curvePoints, pipe.previewShader,
           archerClass, arquebusClass, cannonClass, knightClass,
           defenders, defenderShoots,
           glView.data(), glProj.data(),
@@ -1026,7 +1030,7 @@ Mesh shieldMesh(shieldVertices);
 
     // ------- SELEÇÃO DE TROPA (clique no mundo) -------
     selectedTroopIndex = troop_selection::update(
-        window, cam, cameraPosition, defenders, state, selectedTroopIndex);
+        window, cam, renderCameraPos, defenders, state, selectedTroopIndex);
 
     // ------- RENDER: fumaça dos canhões -------
     {

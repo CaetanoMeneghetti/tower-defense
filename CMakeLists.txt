@@ -25,6 +25,7 @@ set(SOURCES
 
   # game — regras de jogo (combate, placement, geração de cena)
   src/game/collisions.cpp
+  src/game/combat.cpp
   src/game/defender_system.cpp
   src/game/enemy_system.cpp
   src/game/path_navigation.cpp

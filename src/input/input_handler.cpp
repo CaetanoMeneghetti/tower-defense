@@ -113,8 +113,20 @@ void processInput(GLFWwindow *window, Vector<3> &cameraPosition, float deltaTime
 
     if (s.orbitPitch > kMaxPitchRad) s.orbitPitch = kMaxPitchRad;
     if (s.orbitPitch < -kMaxPitchRad) s.orbitPitch = -kMaxPitchRad;
+  } else if (s.cameraMode == CameraMode::Aerial) {
+    // Pan nos 4 sentidos no plano XZ (sem subir/descer).
+    // up = (0,0,-1): na tela, +X é direita e -Z é "para cima".
+    const float pan = kAerialPanSpeed * deltaTime;
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) s.aerialPanZ -= pan;
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) s.aerialPanZ += pan;
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) s.aerialPanX -= pan;
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) s.aerialPanX += pan;
+
+    if (s.aerialPanX >  kAerialPanLimit) s.aerialPanX =  kAerialPanLimit;
+    if (s.aerialPanX < -kAerialPanLimit) s.aerialPanX = -kAerialPanLimit;
+    if (s.aerialPanZ >  kAerialPanLimit) s.aerialPanZ =  kAerialPanLimit;
+    if (s.aerialPanZ < -kAerialPanLimit) s.aerialPanZ = -kAerialPanLimit;
   }
-  // Aerial: sem controles — câmera fixa observando o mapa.
 
   // Toggle de câmera em C — cicla Free ↔ Aerial.
   // A Orbital é entrada automática ao clicar em uma unidade; sai dela com

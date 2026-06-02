@@ -51,6 +51,10 @@ struct AppState {
   float orbitPitch = math_constants::kPi / 6.0f;
   float orbitRadius = 10.0f;
 
+  // ---- Câmera aérea (pan no plano XZ; sem subir/descer) ----
+  float aerialPanX = 0.0f;
+  float aerialPanZ = 0.0f;
+
   // ---- Tamanho do framebuffer ----
   int fbWidth = render_constants::kWindowWidth;
   int fbHeight = render_constants::kWindowHeight;

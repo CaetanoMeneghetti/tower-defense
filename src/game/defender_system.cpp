@@ -3,14 +3,23 @@
 #include <cmath>
 
 #include "game/collisions.h"
+#include "game/combat.h"
 #include "game/game_constants.h"
 
-// Retorna o índice do inimigo mais avançado no path (e vivo) ou -1.
-static int findBestTarget(const std::vector<EnemyInstance> &enemies) {
+// Retorna o índice do inimigo mais avançado no path (vivo) que esteja DENTRO de
+// `range` da origem (ox, oz), ou -1 se nenhum estiver no alcance.
+// O vetor de inimigos são slots (com respawn), não está ordenado por avanço no
+// path — por isso varremos todos e escolhemos o de maior pathDistance no raio.
+static int findBestTargetInRange(const std::vector<EnemyInstance> &enemies,
+                                 const std::vector<EnemyTickResult> &ticks,
+                                 float ox, float oz, float range) {
   int   best = -1;
   float maxD = -1.0f;
   for (int i = 0; i < (int)enemies.size(); ++i) {
-    if (enemies[i].alive && enemies[i].pathDistance > maxD) {
+    if (!enemies[i].alive) continue;
+    if (!collisions::inRange(ox, oz, ticks[i].position[0], ticks[i].position[2], range))
+      continue;
+    if (enemies[i].pathDistance > maxD) {
       maxD = enemies[i].pathDistance;
       best = i;
     }
@@ -38,15 +47,13 @@ DefenderFireResult updateDefenders(std::vector<GameObject> &defenders,
       const float interval = unit.fireRate;
       const int   dmg      = unit.damage;
 
-      int tidx = findBestTarget(enemies);
-      bool canShoot = false;
+      int tidx = findBestTargetInRange(enemies, enemyTicks,
+                                       unit.position[0], unit.position[2], range);
+      bool canShoot = (tidx >= 0);
       float dx = 0.f, dz = 0.f;
-      if (tidx >= 0) {
+      if (canShoot) {
         dx = enemyTicks[tidx].position[0] - unit.position[0];
         dz = enemyTicks[tidx].position[2] - unit.position[2];
-        canShoot = collisions::inRange(unit.position[0], unit.position[2],
-                                        enemyTicks[tidx].position[0], enemyTicks[tidx].position[2],
-                                        range);
       }
 
       if (canShoot) {
@@ -78,15 +85,13 @@ DefenderFireResult updateDefenders(std::vector<GameObject> &defenders,
       const float fireDur   = game_constants::kArquebusFireDuration;
       const float reloadDur = unit.fireRate;
 
-      int tidx = findBestTarget(enemies);
-      bool enemyInRange = false;
+      int tidx = findBestTargetInRange(enemies, enemyTicks,
+                                       unit.position[0], unit.position[2], range);
+      bool enemyInRange = (tidx >= 0);
       float dx = 0.f, dz = 0.f;
-      if (tidx >= 0) {
+      if (enemyInRange) {
         dx = enemyTicks[tidx].position[0] - unit.position[0];
         dz = enemyTicks[tidx].position[2] - unit.position[2];
-        enemyInRange = collisions::inRange(unit.position[0], unit.position[2],
-                                            enemyTicks[tidx].position[0], enemyTicks[tidx].position[2],
-                                            range);
       }
 
       if (shoot.reloading) {
@@ -143,15 +148,13 @@ DefenderFireResult updateDefenders(std::vector<GameObject> &defenders,
       const float fireDur  = game_constants::kCannonFireDuration;
       const float cowerDur = game_constants::kCannonCowerDuration;
 
-      int tidx = findBestTarget(enemies);
-      bool enemyInRange = false;
+      int tidx = findBestTargetInRange(enemies, enemyTicks,
+                                       unit.position[0], unit.position[2], range);
+      bool enemyInRange = (tidx >= 0);
       float dx = 0.f, dz = 0.f;
-      if (tidx >= 0) {
+      if (enemyInRange) {
         dx = enemyTicks[tidx].position[0] - unit.position[0];
         dz = enemyTicks[tidx].position[2] - unit.position[2];
-        enemyInRange = collisions::inRange(unit.position[0], unit.position[2],
-                                           enemyTicks[tidx].position[0], enemyTicks[tidx].position[2],
-                                           range);
       }
 
       if (shoot.reloading) {
@@ -167,9 +170,11 @@ DefenderFireResult updateDefenders(std::vector<GameObject> &defenders,
             // Atualiza orientação para o alvo atual e registra posição do disparo.
             if (tidx >= 0) {
               unit.rotationY = -std::atan2(dx, dz);
-              enemies[tidx].hp -= dmg;
-              enemies[tidx].hitFlashTime = game_constants::kEnemyHitFlashDuration;
-              if (enemies[tidx].hp <= 0) enemies[tidx].hp = 0;
+              // Dano em área: acerta o alvo e todos no raio de splash.
+              combat::applyAreaDamage(enemies, enemyTicks,
+                                      enemyTicks[tidx].position[0],
+                                      enemyTicks[tidx].position[2],
+                                      game_constants::kCannonSplashRadius, dmg);
             }
             {
               using game_constants::kCannonBarrelOffset;
