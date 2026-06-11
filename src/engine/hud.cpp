@@ -9,6 +9,7 @@
 #include "engine/audio.h"
 #include "game/game_constants.h"
 #include "game/wave_system.h"
+#include "spell/spell_mode.h"  // spell::kSpellColors (cores dos feitiços)
 
 // ---------------------------------------------------------------------------
 // Helpers de cor
@@ -158,6 +159,129 @@ void Hud::renderTopBar(AppState &state, const WaveState &ws) {
       ImGui::TextColored(canAfford ? kColorGold : kColorRed, "%s", costStr);
     }
 
+  }
+  ImGui::End();
+  ImGui::PopStyleColor();
+  ImGui::PopStyleVar();
+}
+
+// ---------------------------------------------------------------------------
+// Barra de feitiços — compra (canto inferior esquerdo)
+// ---------------------------------------------------------------------------
+// Espelha a barra de tropas, mas no canto inferior esquerdo e com ícones das
+// formas geométricas (quadrado azul, triângulo laranja, círculo verde) em vez
+// de retratos. Cada feitiço é consumível: clicar compra 1 carga (gasta ouro);
+// desenhar a forma no modo de feitiço (F) gasta a carga. O índice "cls" é a
+// classe da CNN: 0=círculo, 1=quadrado, 2=triângulo.
+void Hud::renderSpellBar(AppState &state) {
+  using game_constants::kSpellCircleCost;
+  using game_constants::kSpellSquareCost;
+  using game_constants::kSpellTriangleCost;
+
+  const float slotW = 66.0f, slotH = 66.0f, gap = 6.0f;
+  const float pad = 8.0f, titleH = 20.0f, costH = 18.0f;
+  const float winW = 3.0f * slotW + 2.0f * gap + 2.0f * pad;
+  const float winH = titleH + slotH + costH + 2.0f * pad;
+
+  ImGuiWindowFlags flags =
+      ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings |
+      ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollWithMouse |
+      ImGuiWindowFlags_NoBringToFrontOnFocus;
+
+  ImGui::SetNextWindowPos(ImVec2(10.0f, state.fbHeight - winH - 10.0f), ImGuiCond_Always);
+  ImGui::SetNextWindowSize(ImVec2(winW, winH), ImGuiCond_Always);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.06f, 0.04f, 0.02f, 0.90f));
+
+  // shape: 0=círculo, 1=quadrado, 2=triângulo. Desenha o ícone perfeito.
+  auto drawIcon = [](ImDrawList *dl, int shape, ImVec2 c, float r, ImU32 col) {
+    if (shape == 1) {
+      dl->AddRectFilled(ImVec2(c.x - r, c.y - r), ImVec2(c.x + r, c.y + r), col, 2.0f);
+    } else if (shape == 2) {
+      ImVec2 v0(c.x, c.y - r);
+      ImVec2 v1(c.x + 0.8660254f * r, c.y + 0.5f * r);
+      ImVec2 v2(c.x - 0.8660254f * r, c.y + 0.5f * r);
+      dl->AddTriangleFilled(v0, v1, v2, col);
+    } else {
+      dl->AddCircleFilled(c, r, col, 32);
+    }
+  };
+
+  struct SpellSlot { int cls; int cost; const char *nome; };
+  const SpellSlot slots[3] = {
+      { 1, kSpellSquareCost,   "Lentid\xc3\xa3o" },  // quadrado azul
+      { 2, kSpellTriangleCost, "Dano"           },   // triângulo laranja
+      { 0, kSpellCircleCost,   "Veneno"         },   // círculo verde
+  };
+
+  if (ImGui::Begin("SpellBar", nullptr, flags)) {
+    ImDrawList *dl = ImGui::GetWindowDrawList();
+    const ImVec2 win = ImGui::GetWindowPos();
+
+    // Título
+    ImGui::SetCursorPos(ImVec2(pad, 4.0f));
+    ImGui::TextColored(kColorGold, "FEITI\xc3\x87OS");
+
+    const float rowY = pad + titleH;
+    for (int i = 0; i < 3; ++i) {
+      const float bx = pad + i * (slotW + gap);
+      const float by = rowY;
+      const int   cls = slots[i].cls;
+      const bool  canAfford = state.gold >= slots[i].cost;
+      const int   charges   = state.spellCharges[cls];
+
+      // Coordenadas absolutas (drawlist) do slot
+      ImVec2 a(win.x + bx, win.y + by);
+      ImVec2 b(win.x + bx + slotW, win.y + by + slotH);
+      dl->AddRectFilled(a, b, IM_COL32(30, 20, 8, 200), 5.0f);
+      dl->AddRect(a, b, IM_COL32(120, 85, 25, 200), 5.0f, 0, 1.5f);
+
+      // Ícone da forma na cor do feitiço
+      const float *rgb = spell::kSpellColors[cls];
+      int alpha = canAfford ? 255 : 110;
+      ImU32 col = IM_COL32(int(rgb[0] * 255), int(rgb[1] * 255), int(rgb[2] * 255), alpha);
+      ImVec2 center(a.x + slotW * 0.5f, a.y + slotH * 0.5f);
+      drawIcon(dl, cls, center, slotW * 0.30f, col);
+
+      // Badge de cargas (canto superior direito do slot)
+      if (charges > 0) {
+        char cnt[8];
+        std::snprintf(cnt, sizeof(cnt), "x%d", charges);
+        ImVec2 ts = ImGui::CalcTextSize(cnt);
+        ImVec2 tp(b.x - ts.x - 5.0f, a.y + 3.0f);
+        dl->AddRectFilled(ImVec2(tp.x - 3, tp.y - 1), ImVec2(tp.x + ts.x + 3, tp.y + ts.y + 1),
+                          IM_COL32(0, 0, 0, 180), 3.0f);
+        dl->AddText(tp, IM_COL32(255, 230, 140, 255), cnt);
+      }
+
+      // Botão invisível por cima do slot para a compra
+      ImGui::SetCursorPos(ImVec2(bx, by));
+      if (ImGui::InvisibleButton(slots[i].nome, ImVec2(slotW, slotH))) {
+        if (canAfford) {
+          state.gold -= slots[i].cost;
+          state.spellCharges[cls]++;
+          audio::playOneShot("data/audio/selection_sound.mp3");
+        }
+      }
+      if (ImGui::IsItemHovered()) {
+        ImGui::BeginTooltip();
+        ImGui::TextColored(kColorGold, "%s", slots[i].nome);
+        const char *desc = (cls == 1) ? "Inimigos na area: 75% da velocidade (permanente)"
+                         : (cls == 2) ? "Inimigos na area perdem metade da vida"
+                                      : "Inimigos na area: veneno 10%/s por 8s";
+        ImGui::Text("%s", desc);
+        ImGui::Text("Custo: %d GP  |  Cargas: %d", slots[i].cost, charges);
+        if (!canAfford) ImGui::TextColored(kColorRed, "Ouro insuficiente!");
+        ImGui::EndTooltip();
+      }
+
+      // Custo embaixo do slot
+      char costStr[12];
+      std::snprintf(costStr, sizeof(costStr), "%d GP", slots[i].cost);
+      float tw = ImGui::CalcTextSize(costStr).x;
+      ImGui::SetCursorPos(ImVec2(bx + (slotW - tw) * 0.5f, by + slotH + 1.0f));
+      ImGui::TextColored(canAfford ? kColorGold : kColorRed, "%s", costStr);
+    }
   }
   ImGui::End();
   ImGui::PopStyleColor();
@@ -443,6 +567,7 @@ void Hud::renderDebugWindow(const AppState &state, float fps) {
 // ---------------------------------------------------------------------------
 void Hud::render(AppState &state, const WaveState &ws, float fps) {
   renderTopBar(state, ws);
+  renderSpellBar(state);
   renderWaveBar(state, ws);
   renderIntermissionOverlay(ws);
   if (ws.phase == WavePhase::Victory) renderVictoryOverlay();

@@ -30,6 +30,7 @@ set(SOURCES
   src/game/enemy_system.cpp
   src/game/path_navigation.cpp
   src/game/scene.cpp
+  src/game/spell_effects.cpp
   src/game/troop_placement.cpp
   src/game/troop_selection.cpp
   src/game/upgrade_system.cpp

@@ -47,6 +47,7 @@
 #include "game/game_constants.h"
 #include "game/path_navigation.h"
 #include "game/scene.h"
+#include "game/spell_effects.h"
 #include "game/troop_placement.h"
 #include "game/troop_selection.h"
 #include "game/upgrade_system.h"
@@ -781,6 +782,7 @@ Mesh shieldMesh(shieldVertices);
           enemies[i].alive        = true;
           enemies[i].hitFlashTime = 0.0f;
           enemies[i].respawnTimer = 0.0f;
+          clearSpellEffects(enemies[i]);
           GameObject &model = (spawnType == enemy_types::kArmored)
                               ? armoredEnemyModels[i] : normalEnemyModels[i];
           model.setAnimation("run");
@@ -851,7 +853,7 @@ Mesh shieldMesh(shieldVertices);
     }
     // ------- INPUT por frame -------
     processInput(window, cameraPosition, deltaTime);
-    spell::update(spellMode, state, window, spellClassifier);
+    spell::update(spellMode, state, window, spellClassifier, deltaTime);
 
     // ------- Clear + camera setup -------
     glClearColor(kFogColor.r, kFogColor.g, kFogColor.b, 1.0f);
@@ -882,6 +884,38 @@ Mesh shieldMesh(shieldVertices);
     auto glView = toOpenGLMatrix(cam.getViewMatrix());
     auto glProj = toOpenGLMatrix(cam.getProjectionMatrix());
     const glm::vec3 glmViewPos(renderCameraPos[0], renderCameraPos[1], renderCameraPos[2]);
+
+    // ------- FEITIÇOS: aplica o efeito das conjurações novas aos inimigos -------
+    // A forma é desenhada/classificada em espaço de tela; aqui projetamos cada
+    // inimigo vivo para a tela e testamos se cai dentro da forma perfeita. Cada
+    // conjuração é aplicada uma única vez (flag applied).
+    for (auto &cast : spellMode.casts) {
+      if (cast.applied) continue;
+      cast.applied = true;
+      for (int i = 0; i < kMaxEnemies; ++i) {
+        if (!enemies[i].alive) continue;
+        const Vector<3> &wp = enemyTicks[i].position;
+        // worldToScreen (column-major, igual ao usado nos tooltips abaixo).
+        float wx = wp[0], wy = 1.0f, wz = wp[2];  // y=1: meio do corpo
+        float vx = glView[0]*wx + glView[4]*wy + glView[8] *wz + glView[12];
+        float vy = glView[1]*wx + glView[5]*wy + glView[9] *wz + glView[13];
+        float vz = glView[2]*wx + glView[6]*wy + glView[10]*wz + glView[14];
+        float vw = glView[3]*wx + glView[7]*wy + glView[11]*wz + glView[15];
+        float cx = glProj[0]*vx + glProj[4]*vy + glProj[8] *vz + glProj[12]*vw;
+        float cy = glProj[1]*vx + glProj[5]*vy + glProj[9] *vz + glProj[13]*vw;
+        float cw = glProj[3]*vx + glProj[7]*vy + glProj[11]*vz + glProj[15]*vw;
+        if (cw <= 0.0f) continue;  // atrás da câmera
+        float sx = ( cx / cw + 1.0f) * 0.5f * static_cast<float>(state.fbWidth);
+        float sy = (-cy / cw + 1.0f) * 0.5f * static_cast<float>(state.fbHeight);
+        if (!spell::pointInCast(cast, sx, sy)) continue;
+
+        // Despacha por forma: 0=círculo (veneno), 1=quadrado (lentidão),
+        // 2=triângulo (metade da vida).
+        if (cast.shape == 0)      spell_effects::applyPoison(enemies[i]);
+        else if (cast.shape == 1) spell_effects::applySlow(enemies[i]);
+        else if (cast.shape == 2) spell_effects::applyHalfLife(enemies[i]);
+      }
+    }
 
     // Constrói lista de luzes combinada (lanternas + tochas dos canhoneiros).
     std::vector<PointLight> allLights = lanternLights;
@@ -1178,13 +1212,24 @@ int main() {
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
+  // Tela cheia "borderless": janela SEM borda, do tamanho exato do monitor e
+  // posicionada na origem dele. O shell do Windows trata isso como fullscreen e
+  // mantém a barra de tarefas embaixo — ela não aparece mais por cima do jogo.
+  // (Não usamos monitor != nullptr de propósito: fullscreen exclusivo minimiza
+  //  e pisca no Alt+Tab; borderless troca de janela instantaneamente.)
+  GLFWmonitor *monitor       = glfwGetPrimaryMonitor();
+  const GLFWvidmode *mode    = glfwGetVideoMode(monitor);
+  int monX = 0, monY = 0;
+  glfwGetMonitorPos(monitor, &monX, &monY);
+  glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
+
   GLFWwindow *window = glfwCreateWindow(
-      render_constants::kWindowWidth, render_constants::kWindowHeight,
-      render_constants::kWindowTitle, nullptr, nullptr);
+      mode->width, mode->height, render_constants::kWindowTitle, nullptr, nullptr);
   if (window == nullptr) {
     glfwTerminate();
     return 1;
   }
+  glfwSetWindowPos(window, monX, monY);
 
   glfwMakeContextCurrent(window);
 

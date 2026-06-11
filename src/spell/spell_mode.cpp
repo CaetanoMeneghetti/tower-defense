@@ -8,6 +8,8 @@
 #include <filesystem>
 #include <fstream>
 
+#include "game/game_constants.h"
+
 namespace spell {
 
 namespace {
@@ -75,7 +77,60 @@ void rasterizeStrokes(const std::vector<Stroke> &strokes, Canvas &out) {
   }
 }
 
+// Centro (px) e "raio" (metade do maior lado do bbox, px) dos traços na tela.
+// Usado para posicionar a forma perfeita no mesmo centro do desenho.
+bool strokesScreenBounds(const std::vector<Stroke> &strokes,
+                         float &cx, float &cy, float &radius) {
+  float minX = 1e9f, minY = 1e9f, maxX = -1e9f, maxY = -1e9f;
+  bool hasPoint = false;
+  for (const auto &s : strokes) {
+    for (const auto &p : s) {
+      minX = std::min(minX, p.x); minY = std::min(minY, p.y);
+      maxX = std::max(maxX, p.x); maxY = std::max(maxY, p.y);
+      hasPoint = true;
+    }
+  }
+  if (!hasPoint) return false;
+  cx = 0.5f * (minX + maxX);
+  cy = 0.5f * (minY + maxY);
+  radius = 0.5f * std::max(maxX - minX, maxY - minY);
+  if (radius < 8.0f) radius = 8.0f;  // mínimo para formas/clique muito pequenos
+  return true;
+}
+
+// Vértices da forma perfeita na tela. Para o triângulo, um equilátero apontando
+// para cima centrado em (cx,cy) com circunraio r (y cresce para baixo na tela).
+void triangleVertices(float cx, float cy, float r, ImVec2 v[3]) {
+  v[0] = ImVec2(cx,                      cy - r);          // topo
+  v[1] = ImVec2(cx + 0.8660254f * r,     cy + 0.5f * r);   // base direita
+  v[2] = ImVec2(cx - 0.8660254f * r,     cy + 0.5f * r);   // base esquerda
+}
+
 }  // namespace
+
+// Teste ponto-dentro-da-forma por tipo (0=círculo, 1=quadrado, 2=triângulo).
+bool pointInCast(const SpellCast &c, float px, float py) {
+  const float dx = px - c.centerX;
+  const float dy = py - c.centerY;
+  if (c.shape == 1) {  // quadrado: axis-aligned, meio-lado = radius
+    return std::abs(dx) <= c.radius && std::abs(dy) <= c.radius;
+  }
+  if (c.shape == 2) {  // triângulo: teste por sinais das três arestas
+    ImVec2 v[3];
+    triangleVertices(c.centerX, c.centerY, c.radius, v);
+    auto edge = [](const ImVec2 &a, const ImVec2 &b, float px, float py) {
+      return (b.x - a.x) * (py - a.y) - (b.y - a.y) * (px - a.x);
+    };
+    float d0 = edge(v[0], v[1], px, py);
+    float d1 = edge(v[1], v[2], px, py);
+    float d2 = edge(v[2], v[0], px, py);
+    bool hasNeg = (d0 < 0) || (d1 < 0) || (d2 < 0);
+    bool hasPos = (d0 > 0) || (d1 > 0) || (d2 > 0);
+    return !(hasNeg && hasPos);
+  }
+  // círculo (0): distância <= raio
+  return dx * dx + dy * dy <= c.radius * c.radius;
+}
 
 void init(SpellMode &s) {
   clear(s.lastCanvas);
@@ -84,7 +139,8 @@ void init(SpellMode &s) {
 void update(SpellMode &s,
             AppState &state,
             GLFWwindow *window,
-            ShapeClassifier &classifier) {
+            ShapeClassifier &classifier,
+            float deltaTime) {
   // F (borda de subida) toggla o modo.
   bool fNow = (glfwGetKey(window, GLFW_KEY_F) == GLFW_PRESS);
   if (fNow && !s.fKeyDown) {
@@ -103,15 +159,42 @@ void update(SpellMode &s,
   }
   s.fKeyDown = fNow;
 
+  // Decai as formas perfeitas ativas (fade) e remove as que expiraram.
+  for (auto &c : s.casts) c.life -= deltaTime;
+  s.casts.erase(std::remove_if(s.casts.begin(), s.casts.end(),
+                               [](const SpellCast &c) { return c.life <= 0.0f; }),
+                s.casts.end());
+
   if (!state.isDrawingSpell) return;
 
   // ENTER (borda de subida): rasteriza + classifica.
   bool enterNow = (glfwGetKey(window, GLFW_KEY_ENTER) == GLFW_PRESS);
   if (enterNow && !s.enterKeyDown && !s.strokes.empty()) {
+    // Centro/raio do desenho na tela ANTES de limpar os traços — a forma
+    // perfeita nascerá centrada no mesmo ponto do desenho.
+    float drawCx = 0.0f, drawCy = 0.0f, drawR = 0.0f;
+    bool hasBounds = strokesScreenBounds(s.strokes, drawCx, drawCy, drawR);
+
     rasterizeStrokes(s.strokes, s.lastCanvas);
     s.lastResult = classifier.classify(s.lastCanvas);
     for (int i = 0; i < 3; ++i) s.lastProbs[i] = s.lastResult.probs[i];
     s.hasCanvas = true;
+
+    // Lança o feitiço SOMENTE se a forma foi reconhecida e o jogador tem carga
+    // daquele feitiço. Sem carga (ou abaixo do threshold) -> não acontece nada.
+    const int cls = s.lastResult.classIndex;
+    if (hasBounds && cls >= 0 && cls < 3 && state.spellCharges[cls] > 0) {
+      state.spellCharges[cls]--;
+      SpellCast cast;
+      cast.shape   = cls;
+      cast.centerX = drawCx;
+      cast.centerY = drawCy;
+      cast.radius  = drawR;
+      cast.life    = game_constants::kSpellVisualDuration;
+      cast.maxLife = game_constants::kSpellVisualDuration;
+      cast.applied = false;  // main aplica o efeito aos inimigos neste frame
+      s.casts.push_back(cast);
+    }
 
     // ---- Salva o canvas 50x50 como PGM em captures/ ----
     // Formato igual ao dataset original: traço preto (0), fundo branco (255).
@@ -167,6 +250,35 @@ void update(SpellMode &s,
 void render(const SpellMode &s, const AppState &state) {
   ImDrawList *dl = ImGui::GetForegroundDrawList();
 
+  // ---- Formas perfeitas conjuradas (com fade-out) ----
+  // Após a CNN reconhecer o desenho, mostramos a forma geométrica PERFEITA na
+  // cor do feitiço, centrada no centro do desenho. Some suavemente em maxLife.
+  for (const auto &c : s.casts) {
+    float t = (c.maxLife > 0.0f) ? (c.life / c.maxLife) : 0.0f;
+    if (t < 0.0f) t = 0.0f;
+    if (t > 1.0f) t = 1.0f;
+    const float *rgb = kSpellColors[c.shape];
+    int a    = static_cast<int>(200.0f * t);   // contorno
+    int aFill = static_cast<int>(70.0f * t);    // preenchimento
+    ImU32 line = IM_COL32(int(rgb[0] * 255), int(rgb[1] * 255), int(rgb[2] * 255), a);
+    ImU32 fill = IM_COL32(int(rgb[0] * 255), int(rgb[1] * 255), int(rgb[2] * 255), aFill);
+    const float th = 4.0f;
+    if (c.shape == 1) {  // quadrado
+      ImVec2 p0(c.centerX - c.radius, c.centerY - c.radius);
+      ImVec2 p1(c.centerX + c.radius, c.centerY + c.radius);
+      dl->AddRectFilled(p0, p1, fill);
+      dl->AddRect(p0, p1, line, 0.0f, 0, th);
+    } else if (c.shape == 2) {  // triângulo
+      ImVec2 v[3];
+      triangleVertices(c.centerX, c.centerY, c.radius, v);
+      dl->AddTriangleFilled(v[0], v[1], v[2], fill);
+      dl->AddTriangle(v[0], v[1], v[2], line, th);
+    } else {  // círculo
+      dl->AddCircleFilled(ImVec2(c.centerX, c.centerY), c.radius, fill, 48);
+      dl->AddCircle(ImVec2(c.centerX, c.centerY), c.radius, line, 48, th);
+    }
+  }
+
   // ---- Traços em desenho (linhas brancas grossas em cima da cena) ----
   if (state.isDrawingSpell) {
     const ImU32 stroke = IM_COL32(255, 255, 255, 255);
@@ -195,7 +307,8 @@ void render(const SpellMode &s, const AppState &state) {
   // Aparece quando há resultado, OU quando estamos em modo desenho (pra ver o
   // crop debug do último desenho mesmo antes de classificar de novo).
   if (s.hasCanvas) {
-    ImGui::SetNextWindowPos(ImVec2(10.0f, 200.0f), ImGuiCond_Always);
+    // Abaixo da janela de Debug (que cresce a partir de y=120) para não sobrepor.
+    ImGui::SetNextWindowPos(ImVec2(10.0f, 300.0f), ImGuiCond_Always);
     ImGuiWindowFlags wflags = ImGuiWindowFlags_AlwaysAutoResize |
                               ImGuiWindowFlags_NoSavedSettings |
                               ImGuiWindowFlags_NoCollapse |

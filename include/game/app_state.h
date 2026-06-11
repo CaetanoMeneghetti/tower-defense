@@ -29,6 +29,12 @@ struct AppState {
   // Quando true: câmera/seleção/placement ficam congelados; F sai.
   bool isDrawingSpell = false;
 
+  // Cargas de feitiço possuídas (consumíveis). Índice = classe da CNN:
+  // 0=círculo (veneno), 1=quadrado (lentidão), 2=triângulo (metade da vida).
+  // Comprar no HUD incrementa; desenhar a forma decrementa. Só é possível
+  // lançar um feitiço com carga > 0.
+  int spellCharges[3] = {0, 0, 0};
+
   // ---- Câmera (modo) ----
   CameraMode cameraMode = CameraMode::Free;
   bool cPressed = false;

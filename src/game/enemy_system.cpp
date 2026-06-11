@@ -13,7 +13,14 @@ EnemyInstance makeEnemy(const EnemyStats &stats) {
   enemy.respawnTimer   = 0.0f;
   enemy.hitFlashTime   = 0.0f;
   enemy.waveControlled = false;
+  clearSpellEffects(enemy);
   return enemy;
+}
+
+void clearSpellEffects(EnemyInstance &enemy) {
+  enemy.speedMultiplier = 1.0f;
+  enemy.poisonTimer     = 0.0f;
+  enemy.poisonAccum     = 0.0f;
 }
 
 EnemyTickResult updateEnemy(EnemyInstance &enemy,
@@ -35,9 +42,27 @@ EnemyTickResult updateEnemy(EnemyInstance &enemy,
     enemyModel.setAnimation("death");
   }
 
+  // --- Veneno do feitiço círculo (dano contínuo) ---
+  // Tira game_constants::kSpellPoisonFraction (10%) da vida máxima por segundo
+  // enquanto poisonTimer > 0. hp é int, então acumulamos o dano fracionário em
+  // poisonAccum e descontamos a parte inteira a cada frame.
+  if (enemy.alive && enemy.poisonTimer > 0.0f) {
+    enemy.poisonTimer -= deltaTime;
+    if (enemy.poisonTimer < 0.0f) enemy.poisonTimer = 0.0f;
+    enemy.poisonAccum +=
+        enemy.stats.maxHp * game_constants::kSpellPoisonFraction * deltaTime;
+    int whole = static_cast<int>(enemy.poisonAccum);
+    if (whole > 0) {
+      enemy.hp -= whole;
+      enemy.poisonAccum -= static_cast<float>(whole);
+      enemy.hitFlashTime = game_constants::kEnemyHitFlashDuration;
+    }
+  }
+
   // --- Movimento ou animação de morte ---
   if (enemy.alive) {
-    enemy.pathDistance += enemy.stats.speed * deltaTime;
+    // speedMultiplier carrega a lentidão permanente do feitiço quadrado (0.75).
+    enemy.pathDistance += enemy.stats.speed * enemy.speedMultiplier * deltaTime;
     enemyModel.update(deltaTime);
   } else {
     enemyModel.update(deltaTime);
@@ -53,6 +78,7 @@ EnemyTickResult updateEnemy(EnemyInstance &enemy,
       enemy.pathDistance = 0.0f;
       enemy.alive        = true;
       enemy.hitFlashTime = 0.0f;
+      clearSpellEffects(enemy);
       enemyModel.setAnimation("run");
     }
   }

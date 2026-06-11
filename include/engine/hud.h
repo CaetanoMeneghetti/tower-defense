@@ -36,6 +36,7 @@ class Hud {
  private:
   void setupStyle();
   void renderTopBar(AppState &state, const WaveState &ws);
+  void renderSpellBar(AppState &state);
   void renderWaveBar(const AppState &state, const WaveState &ws);
   void renderIntermissionOverlay(const WaveState &ws);
   void renderVictoryOverlay();

@@ -77,6 +77,18 @@ constexpr int kArquebusCost = 75;
 constexpr int kCannonCost   = 100;
 constexpr int kKnightCost   = 80;
 
+// ---- Feitiços (desenho + CNN) ----
+// Cada feitiço é consumível: comprar adiciona 1 carga; desenhar a forma gasta a
+// carga correspondente. Índice de classe da CNN: 0=círculo, 1=quadrado, 2=triângulo.
+constexpr float kSpellSlowMultiplier = 0.75f;  // quadrado: anda a 75% da velocidade
+constexpr float kSpellPoisonFraction = 0.10f;  // círculo: 10% da vida máx por segundo
+constexpr float kSpellPoisonDuration = 8.0f;   // círculo: duração do veneno (s)
+constexpr int   kSpellCircleCost     = 90;     // veneno
+constexpr int   kSpellSquareCost     = 60;     // lentidão
+constexpr int   kSpellTriangleCost   = 120;    // metade da vida
+// Tempo que a forma perfeita fica visível na tela após o lançamento (fade-out).
+constexpr float kSpellVisualDuration = 1.2f;
+
 // --- Espadachim (path walker)
 constexpr int   kKnightMaxHp = 80;
 constexpr float kKnightSpeed = 1.5f;

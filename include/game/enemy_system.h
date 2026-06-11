@@ -34,7 +34,18 @@ struct EnemyInstance {
   float hitFlashTime;
   // Quando true, o respawn automático é suprimido — o wave system controla.
   bool waveControlled = false;
+
+  // ---- Efeitos de feitiço (ver game/spell_effects.h) ----
+  // Multiplicador de velocidade do feitiço quadrado (lentidão permanente).
+  float speedMultiplier = 1.0f;
+  // Veneno do feitiço círculo: segundos restantes + acumulador fracionário de
+  // dano (hp é int; o veneno tira 10% da vida máx por segundo).
+  float poisonTimer = 0.0f;
+  float poisonAccum = 0.0f;
 };
+
+// Zera os efeitos de feitiço (lentidão/veneno) — chamado ao (re)nascer.
+void clearSpellEffects(EnemyInstance &enemy);
 
 // Stats pré-definidas (declaração em .cpp).
 extern const EnemyStats kZombieStats;
