@@ -4,163 +4,47 @@
 
 #include <cstdio>
 
+namespace {
+struct UpgradeEntry { int cost, dmg; float range, fireRate; const char *desc; };
+
+// Tabela de upgrades: [nível atual 1..4] → stats do próximo nível (2..5).
+const UpgradeEntry kArcher[4] = {
+    {50,  12, 18.0f, 1.8f, "Nivel 2: Flechas de Ponta Larga.\nAumenta levemente o dano base e o alcance para conter os primeiros inimigos."},
+    {120, 16, 22.0f, 1.5f, "Nivel 3: Treinamento de Cadencia.\nOs arqueiros disparam consideravelmente mais rapido. Excelente contra hordas."},
+    {250, 22, 25.0f, 1.2f, "Nivel 4: Arcos de Madeira Composta.\nEquipamento superior que garante projeteis mais rapidos e dano letal."},
+    {500, 35, 30.0f, 0.8f, "Nivel 5: Mestres Arqueiros.\nO auge da arquearia. Chuva de flechas implacavel com alcance cobrindo quase todo o campo."},
+};
+const UpgradeEntry kArquebus[4] = {
+    {80,  25, 16.0f, 1.9f, "Nivel 2: Polvora Refinada.\nReduz os detritos no cano, aumentando ligeiramente a cadencia de disparo."},
+    {180, 45, 17.0f, 1.9f, "Nivel 3: Balas de Chumbo Pesadas.\nFoca inteiramente no impacto. Dano massivo capaz de rasgar armaduras medias."},
+    {350, 70, 19.0f, 1.8f, "Nivel 4: Cano Longo Estriado.\nMelhora a precisao a longas distancias, permitindo atirar um pouco mais longe com forca total."},
+    {700, 120, 22.0f, 1.5f, "Nivel 5: Mosqueteiros de Elite.\nArmamento de ponta. Cada tiro e um canhao portatil com tempo de recarga otimizado."},
+};
+const UpgradeEntry kCannon[4] = {
+    {120, 55, 14.0f, 2.5f, "Nivel 2: Polvora Grossa.\nCarga mais potente aumenta o dano da bala de canhao e o alcance ligeiramente."},
+    {250, 80, 16.0f, 2.3f, "Nivel 3: Bala de Ferro Macico.\nProjetil mais denso rasga qualquer armadura. Dano expressivo."},
+    {450, 120, 18.0f, 2.0f, "Nivel 4: Cano Reforçado.\nMelhor guia e maior pressao de gas, ampliando alcance e cadencia."},
+    {900, 200, 22.0f, 1.8f, "Nivel 5: Basilisco de Guerra.\nO maior canhao de campo. Cada disparo e devastador e cobre quase todo o campo de batalha."},
+};
+const UpgradeEntry kCommander[4] = {
+    {60,  2, 0.0f, 0.0f, "Nivel 2: Chamado de Guerra.\nO comandante passa a invocar 2 cavaleiros a cada chamada."},
+    {140, 3, 0.0f, 0.0f, "Nivel 3: Esquadrao de Ferro.\nO chamado mobiliza 3 cavaleiros imediatamente."},
+    {280, 4, 0.0f, 0.0f, "Nivel 4: Carga da Cavalaria.\nQuatro cavaleiros avancam a cada invocacao. Os inimigos nao podem deter a mare."},
+    {500, 6, 0.0f, 0.0f, "Nivel 5: Legiao Infindavel.\nSeis cavaleiros por chamada — uma avalanche de aco que esmagara qualquer horda."},
+};
+}  // namespace
+
 UpgradeData calculateUpgrade(int troopType, int currentLevel) {
-  UpgradeData data;
+  const UpgradeEntry *tbl = (troopType == 1) ? kArcher
+                          : (troopType == 2) ? kArquebus
+                          : (troopType == 3) ? kCommander
+                          : (troopType == 4) ? kCannon
+                                             : nullptr;
+  if (!tbl || currentLevel < 1 || currentLevel > 4)
+    return {9999, 0, 0.0f, 0.0f, "Upgrade nao encontrado."};  // fallback seguro
 
-  // Fallback seguro
-  data.cost = 9999;
-  data.nextDamage = 0;
-  data.nextRange = 0.0f;
-  data.nextFireRate = 0.0f;
-  data.description = "Upgrade nao encontrado.";
-
-  if (troopType == 1) {
-    // ---------------- ARQUEIRO ----------------
-    switch (currentLevel) {
-      case 1:  // 1 → 2
-        data.cost = 50;
-        data.nextDamage = 12;
-        data.nextRange = 18.0f;
-        data.nextFireRate = 1.8f;
-        data.description =
-            "Nivel 2: Flechas de Ponta Larga.\nAumenta levemente o dano base e o alcance para conter os primeiros inimigos.";
-        break;
-      case 2:  // 2 → 3
-        data.cost = 120;
-        data.nextDamage = 16;
-        data.nextRange = 22.0f;
-        data.nextFireRate = 1.5f;
-        data.description =
-            "Nivel 3: Treinamento de Cadencia.\nOs arqueiros disparam consideravelmente mais rapido. Excelente contra hordas.";
-        break;
-      case 3:  // 3 → 4
-        data.cost = 250;
-        data.nextDamage = 22;
-        data.nextRange = 25.0f;
-        data.nextFireRate = 1.2f;
-        data.description =
-            "Nivel 4: Arcos de Madeira Composta.\nEquipamento superior que garante projeteis mais rapidos e dano letal.";
-        break;
-      case 4:  // 4 → 5 (MÁXIMO)
-        data.cost = 500;
-        data.nextDamage = 35;
-        data.nextRange = 30.0f;
-        data.nextFireRate = 0.8f;
-        data.description =
-            "Nivel 5: Mestres Arqueiros.\nO auge da arquearia. Chuva de flechas implacavel com alcance cobrindo quase todo o campo.";
-        break;
-    }
-  } else if (troopType == 2) {
-    // ---------------- ARCABUZEIRO ----------------
-    switch (currentLevel) {
-      case 1:
-        data.cost = 80;
-        data.nextDamage = 25;
-        data.nextRange = 16.0f;
-        data.nextFireRate = 1.9f;
-        data.description =
-            "Nivel 2: Polvora Refinada.\nReduz os detritos no cano, aumentando ligeiramente a cadencia de disparo.";
-        break;
-      case 2:
-        data.cost = 180;
-        data.nextDamage = 45;
-        data.nextRange = 17.0f;
-        data.nextFireRate = 1.9f;
-        data.description =
-            "Nivel 3: Balas de Chumbo Pesadas.\nFoca inteiramente no impacto. Dano massivo capaz de rasgar armaduras medias.";
-        break;
-      case 3:
-        data.cost = 350;
-        data.nextDamage = 70;
-        data.nextRange = 19.0f;
-        data.nextFireRate = 1.8f;
-        data.description =
-            "Nivel 4: Cano Longo Estriado.\nMelhora a precisao a longas distancias, permitindo atirar um pouco mais longe com forca total.";
-        break;
-      case 4:
-        data.cost = 700;
-        data.nextDamage = 120;
-        data.nextRange = 22.0f;
-        data.nextFireRate = 1.5f;
-        data.description =
-            "Nivel 5: Mosqueteiros de Elite.\nArmamento de ponta. Cada tiro e um canhao portatil com tempo de recarga otimizado.";
-        break;
-    }
-  } else if (troopType == 4) {
-    // ---------------- CANHONEIRO ----------------
-    switch (currentLevel) {
-      case 1:
-        data.cost = 120;
-        data.nextDamage = 55;
-        data.nextRange = 14.0f;
-        data.nextFireRate = 2.5f;
-        data.description =
-            "Nivel 2: Polvora Grossa.\nCarga mais potente aumenta o dano da bala de canhao e o alcance ligeiramente.";
-        break;
-      case 2:
-        data.cost = 250;
-        data.nextDamage = 80;
-        data.nextRange = 16.0f;
-        data.nextFireRate = 2.3f;
-        data.description =
-            "Nivel 3: Bala de Ferro Macico.\nProjetil mais denso rasga qualquer armadura. Dano expressivo.";
-        break;
-      case 3:
-        data.cost = 450;
-        data.nextDamage = 120;
-        data.nextRange = 18.0f;
-        data.nextFireRate = 2.0f;
-        data.description =
-            "Nivel 4: Cano Reforçado.\nMelhor guia e maior pressao de gas, ampliando alcance e cadencia.";
-        break;
-      case 4:
-        data.cost = 900;
-        data.nextDamage = 200;
-        data.nextRange = 22.0f;
-        data.nextFireRate = 1.8f;
-        data.description =
-            "Nivel 5: Basilisco de Guerra.\nO maior canhao de campo. Cada disparo e devastador e cobre quase todo o campo de batalha.";
-        break;
-    }
-  } else if (troopType == 3) {
-    // ---------------- COMANDANTE ----------------
-    switch (currentLevel) {
-      case 1:
-        data.cost = 60;
-        data.nextDamage = 2;
-        data.nextRange = 0.0f;
-        data.nextFireRate = 0.0f;
-        data.description =
-            "Nivel 2: Chamado de Guerra.\nO comandante passa a invocar 2 cavaleiros a cada chamada.";
-        break;
-      case 2:
-        data.cost = 140;
-        data.nextDamage = 3;
-        data.nextRange = 0.0f;
-        data.nextFireRate = 0.0f;
-        data.description =
-            "Nivel 3: Esquadrao de Ferro.\nO chamado mobiliza 3 cavaleiros imediatamente.";
-        break;
-      case 3:
-        data.cost = 280;
-        data.nextDamage = 4;
-        data.nextRange = 0.0f;
-        data.nextFireRate = 0.0f;
-        data.description =
-            "Nivel 4: Carga da Cavalaria.\nQuatro cavaleiros avancam a cada invocacao. Os inimigos nao podem deter a mare.";
-        break;
-      case 4:
-        data.cost = 500;
-        data.nextDamage = 6;
-        data.nextRange = 0.0f;
-        data.nextFireRate = 0.0f;
-        data.description =
-            "Nivel 5: Legiao Infindavel.\nSeis cavaleiros por chamada — uma avalanche de aco que esmagara qualquer horda.";
-        break;
-    }
-  }
-
-  return data;
+  const UpgradeEntry &e = tbl[currentLevel - 1];
+  return {e.cost, e.dmg, e.range, e.fireRate, e.desc};
 }
 
 bool drawTroopDetailsHud(GameObject &troop, AppState &state, unsigned int placeholderIcon) {

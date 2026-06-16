@@ -11,9 +11,7 @@
 // Tabela de upgrades por tipo de tropa (níveis 1..kMaxTroopLevel) + janela
 // ImGui que mostra stats atuais → próximos e oferece o botão "UPGRADE - Xg".
 
-// Nível máximo de uma tropa (acima disso, sem upgrades disponíveis).
-// Tem que casar com a quantidade de tiers no TroopDef de cada classe.
-constexpr int kMaxTroopLevel = 5;
+// kMaxTroopLevel vem de engine/game_object.h (o nível é estado do GameObject).
 
 struct UpgradeData {
   int cost;

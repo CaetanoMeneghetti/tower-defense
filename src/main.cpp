@@ -735,6 +735,16 @@ Mesh shieldMesh(shieldVertices);
   static const char* kArcherShots[]   = {"data/audio/archer_shot1.mp3",   "data/audio/archer_shot2.mp3"};
   static const char* kArquebusShots[] = {"data/audio/arquebus_shot1.mp3", "data/audio/arquebus_shot2.mp3"};
 
+  // Pré-decodifica os SFX (mata a latência do 1º uso). Músicas ficam em streaming.
+  audio::preloadOneShots({
+      "data/audio/archer_shot1.mp3", "data/audio/archer_shot2.mp3",
+      "data/audio/arquebus_shot1.mp3", "data/audio/arquebus_shot2.mp3",
+      "data/audio/cannon1.mp3", "data/audio/knight_hit.mp3",
+      "data/audio/selection_sound.mp3",
+      "data/audio/charge1.mp3", "data/audio/charge2.mp3", "data/audio/charge3.mp3",
+      "data/audio/charge4.mp3", "data/audio/charge5.mp3", "data/audio/charge6.mp3",
+  });
+
   // Música de intermission começa imediatamente; posição preservada entre ondas
   audio::startIntermissionMusic(kIntermissionTracks[std::rand() % 3]);
 
@@ -786,6 +796,18 @@ Mesh shieldMesh(shieldVertices);
           GameObject &model = (spawnType == enemy_types::kArmored)
                               ? armoredEnemyModels[i] : normalEnemyModels[i];
           model.setAnimation("run");
+          // O tick deste slot está na origem (resetado no início do frame, sem
+          // passar pelo updateEnemy por estar morto). Sem corrigir, os defensores
+          // veriam o recém-nascido em (0,0) e reagiriam fora do alcance. Calcula a
+          // posição real de spawn (início do path).
+          {
+            float spawnAngle = 0.0f;
+            bool  spawnReached = false;
+            enemyTicks[i].position = getPositionAtDistance(
+                curvePoints, curveCache, 0.0f, spawnAngle, spawnReached);
+            enemyTicks[i].angle = spawnAngle;
+            enemyTicks[i].diedThisFrame = false;
+          }
           break;
         }
       }
@@ -886,9 +908,8 @@ Mesh shieldMesh(shieldVertices);
     const glm::vec3 glmViewPos(renderCameraPos[0], renderCameraPos[1], renderCameraPos[2]);
 
     // ------- FEITIÇOS: aplica o efeito das conjurações novas aos inimigos -------
-    // A forma é desenhada/classificada em espaço de tela; aqui projetamos cada
-    // inimigo vivo para a tela e testamos se cai dentro da forma perfeita. Cada
-    // conjuração é aplicada uma única vez (flag applied).
+    // A forma vive em espaço de tela; projetamos cada inimigo vivo e testamos se
+    // cai dentro dela. Cada conjuração é aplicada uma única vez (flag applied).
     for (auto &cast : spellMode.casts) {
       if (cast.applied) continue;
       cast.applied = true;
@@ -909,8 +930,7 @@ Mesh shieldMesh(shieldVertices);
         float sy = (-cy / cw + 1.0f) * 0.5f * static_cast<float>(state.fbHeight);
         if (!spell::pointInCast(cast, sx, sy)) continue;
 
-        // Despacha por forma: 0=círculo (veneno), 1=quadrado (lentidão),
-        // 2=triângulo (metade da vida).
+        // Por forma: 0=círculo (veneno), 1=quadrado (lentidão), 2=triângulo (½ vida).
         if (cast.shape == 0)      spell_effects::applyPoison(enemies[i]);
         else if (cast.shape == 1) spell_effects::applySlow(enemies[i]);
         else if (cast.shape == 2) spell_effects::applyHalfLife(enemies[i]);
@@ -1113,9 +1133,8 @@ Mesh shieldMesh(shieldVertices);
           return {{sx, sy}, true};
         };
 
-        // Projeta pés (Y=0) e cabeça (Y=kH) e verifica se o mouse está dentro
-        // do retângulo de tela com padding horizontal kPad.
-        const float kH   = 1.7f;   // altura aproximada do personagem em unidades do mundo
+        // Projeta pés (Y=0) e cabeça (Y=kH); mouse dentro do retângulo + kPad?
+        const float kH   = 1.7f;   // altura aprox. do personagem (unidades do mundo)
         const float kPad = 25.0f;  // padding horizontal em pixels
         auto overModel = [&](float wx, float wz) -> bool {
           auto [sFoot, okF] = worldToScreen(wx, 0.0f, wz);

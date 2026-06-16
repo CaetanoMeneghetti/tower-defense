@@ -70,7 +70,8 @@ void AnimatedModel::loadAnimation(const std::string &name, const std::string &pa
 }
 
 std::vector<glm::mat4> AnimatedModel::getTransformsAtTime(const std::string &animName,
-                                                          float timeInSeconds) {
+                                                          float timeInSeconds,
+                                                          bool loop) {
   const aiAnimation *animation = nullptr;
   if (animations_.count(animName)) {
     animation = animations_[animName]->mAnimations[0];
@@ -80,7 +81,15 @@ std::vector<glm::mat4> AnimatedModel::getTransformsAtTime(const std::string &ani
 
   if (animation) {
     float tps = animation->mTicksPerSecond != 0 ? animation->mTicksPerSecond : 25.0f;
-    float timeInTicks = fmod(timeInSeconds * tps, (float)animation->mDuration);
+    const float duration = (float)animation->mDuration;
+    float timeInTicks = timeInSeconds * tps;
+    if (loop) {
+      timeInTicks = fmod(timeInTicks, duration);
+    } else {
+      // Clipe de ação: trava no intervalo [0, duração] (segura o último frame).
+      if (timeInTicks < 0.0f)      timeInTicks = 0.0f;
+      else if (timeInTicks > duration) timeInTicks = duration;
+    }
     calculateBoneTransform(scene_->mRootNode, glm::mat4(1.0f), animation, timeInTicks);
   }
   return finalBoneMatrices_;

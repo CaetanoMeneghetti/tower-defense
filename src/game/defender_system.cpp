@@ -6,10 +6,9 @@
 #include "game/combat.h"
 #include "game/game_constants.h"
 
-// Retorna o índice do inimigo mais avançado no path (vivo) que esteja DENTRO de
-// `range` da origem (ox, oz), ou -1 se nenhum estiver no alcance.
-// O vetor de inimigos são slots (com respawn), não está ordenado por avanço no
-// path — por isso varremos todos e escolhemos o de maior pathDistance no raio.
+// Índice do inimigo vivo mais avançado no path dentro de `range` de (ox,oz), ou
+// -1. Os inimigos são slots não ordenados, então varremos todos pelo maior
+// pathDistance no raio.
 static int findBestTargetInRange(const std::vector<EnemyInstance> &enemies,
                                  const std::vector<EnemyTickResult> &ticks,
                                  float ox, float oz, float range) {
@@ -37,6 +36,11 @@ DefenderFireResult updateDefenders(std::vector<GameObject> &defenders,
   if (defenderShoots.size() < defenders.size())
     defenderShoots.resize(defenders.size(), DefenderShoot{});
 
+  // Comandante só invoca com inimigos em campo (evita invocar na intermissão).
+  bool anyEnemyAlive = false;
+  for (const auto &e : enemies)
+    if (e.alive) { anyEnemyAlive = true; break; }
+
   for (size_t i = 0; i < defenders.size(); ++i) {
     auto &unit  = defenders[i];
     auto &shoot = defenderShoots[i];
@@ -59,7 +63,7 @@ DefenderFireResult updateDefenders(std::vector<GameObject> &defenders,
       if (canShoot) {
         unit.rotationY = -std::atan2(dx, dz);
         if (!shoot.aiming) {
-          unit.setAnimation("aim");
+          unit.setAnimation("aim", false);  // segura a corda esticada
           shoot.aiming     = true;
           shoot.shootTimer = 0.0f;
         }
@@ -115,7 +119,7 @@ DefenderFireResult updateDefenders(std::vector<GameObject> &defenders,
       } else if (enemyInRange) {
         // Início do ciclo: dispara imediatamente (som + dano no frame da animação)
         unit.rotationY = -std::atan2(dx, dz);
-        unit.setAnimation("fire");
+        unit.setAnimation("fire", false);
         shoot.aiming     = true;
         shoot.reloading  = false;
         shoot.shootTimer = 0.0f;
@@ -131,12 +135,9 @@ DefenderFireResult updateDefenders(std::vector<GameObject> &defenders,
               unit.position[1] + 1.2f,
               unit.position[2] + fwdZ * 1.2f));
         }
-      } else if (!shoot.aiming && !shoot.reloading) {
-        // Sem alvo e idle — garante animação idle
-        // (só redefine se estava saindo de outra animação)
       }
 
-      // Se saiu do range enquanto idle (não no meio de um ciclo), atualiza rotação
+      // Idle com alvo no range: mantém a rotação acompanhando o inimigo.
       if (!shoot.aiming && !shoot.reloading && enemyInRange && tidx >= 0)
         unit.rotationY = -std::atan2(dx, dz);
     }
@@ -166,17 +167,15 @@ DefenderFireResult updateDefenders(std::vector<GameObject> &defenders,
             // Tiro acontece aqui — inicio do cower reverso.
             shoot.reversing = true;
             unit.setAnimationReverse("cower", cowerDur);
-            ++result.cannonFired;
-            // Atualiza orientação para o alvo atual e registra posição do disparo.
+            // Estampido/dano/fumaça só com alvo no alcance; senão termina mudo.
             if (tidx >= 0) {
               unit.rotationY = -std::atan2(dx, dz);
-              // Dano em área: acerta o alvo e todos no raio de splash.
+              // Dano em área no alvo e em todos no raio de splash.
               combat::applyAreaDamage(enemies, enemyTicks,
                                       enemyTicks[tidx].position[0],
                                       enemyTicks[tidx].position[2],
                                       game_constants::kCannonSplashRadius, dmg);
-            }
-            {
+              ++result.cannonFired;
               using game_constants::kCannonBarrelOffset;
               float fwdX = -std::sin(unit.rotationY);
               float fwdZ =  std::cos(unit.rotationY);
@@ -204,17 +203,22 @@ DefenderFireResult updateDefenders(std::vector<GameObject> &defenders,
             shoot.aiming    = false;
             shoot.reloading = true;
             shoot.reversing = false;
-            unit.setAnimation("cower");
+            unit.setAnimation("cower", false);
           }
         }
-      } else if (enemyInRange) {
-        // Inicia ciclo: orienta o canhoneiro e começa animação de fire.
-        unit.rotationY = -std::atan2(dx, dz);
-        unit.setAnimation("fire");
-        shoot.aiming     = true;
-        shoot.reloading  = false;
-        shoot.reversing  = false;
-        shoot.shootTimer = 0.0f;
+      } else {
+        // Idle: acumula a recarga até unit.fireRate e só dispara com alvo E
+        // recarga pronta — assim o upgrade de "Recarga" acelera a cadência.
+        shoot.shootTimer += deltaTime;
+        if (shoot.shootTimer > unit.fireRate) shoot.shootTimer = unit.fireRate;
+        if (enemyInRange && shoot.shootTimer >= unit.fireRate) {
+          unit.rotationY = -std::atan2(dx, dz);
+          unit.setAnimation("fire", false);
+          shoot.aiming     = true;
+          shoot.reloading  = false;
+          shoot.reversing  = false;
+          shoot.shootTimer = 0.0f;
+        }
       }
     }
 
@@ -224,19 +228,19 @@ DefenderFireResult updateDefenders(std::vector<GameObject> &defenders,
       const float animDur  = game_constants::kKnightCommandAnimDuration;
 
       if (shoot.aiming) {
-        // Reproduzindo animação de comando
+        // Reproduzindo animação de comando (conclui mesmo sem inimigos)
         shoot.shootTimer += deltaTime;
         if (shoot.shootTimer >= animDur) {
           shoot.aiming     = false;
           shoot.shootTimer = 0.0f;
           unit.setIdleAnimations({"knightIdle"});
         }
-      } else {
+      } else if (anyEnemyAlive) {
         shoot.shootTimer += deltaTime;
         if (shoot.shootTimer >= interval) {
           shoot.shootTimer = 0.0f;
           shoot.aiming     = true;
-          unit.setAnimation("command");
+          unit.setAnimation("command", false);
           result.knightSummoned += (unit.damage > 0) ? unit.damage : 1;
           ++result.chargePlayed;
         }

@@ -12,8 +12,7 @@
 void handleTroopPlacement(const TroopPlacementContext &ctx, AppState &state, float deltaTime) {
   using namespace game_constants;
 
-  // Bloqueia o disparo do "click" enquanto o botão do mouse ainda está
-  // pressionado desde o clique no botão da HUD.
+  // Ignora o "click" enquanto o botão segue pressionado desde o clique na HUD.
   static bool waitingForRelease = true;
   if (waitingForRelease) {
     if (glfwGetMouseButton(ctx.window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_RELEASE) {
@@ -95,8 +94,9 @@ void handleTroopPlacement(const TroopPlacementContext &ctx, AppState &state, flo
     } else if (state.selectedTroopType == defender_types::kCannon) {
       state.gold -= kCannonCost;
       GameObject newCannon(&ctx.cannonClass, groundPos);
-      newCannon.damage = kCannonDamage;
-      newCannon.range  = kCannonRange;
+      newCannon.damage   = kCannonDamage;
+      newCannon.range    = kCannonRange;
+      newCannon.fireRate = kCannonBaseReload;  // recarga base (cooldown entre ciclos)
       newCannon.setIdleAnimations({"idle1"});
       ctx.defenders.push_back(newCannon);
       ctx.defenderShoots.push_back(DefenderShoot{});

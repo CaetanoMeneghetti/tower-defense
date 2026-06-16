@@ -29,6 +29,11 @@ struct TroopTier {
   glm::mat4 weaponOffset = glm::mat4(1.0f);
 };
 
+// Nível máximo de uma tropa (acima disso, sem upgrades disponíveis). O nível
+// progride até aqui mesmo que a classe só tenha 1 tier de modelo (canhão,
+// comandante) — a troca de mesh é condicional ao tier, o ++level não.
+constexpr int kMaxTroopLevel = 5;
+
 // Definição de classe (família) de tropa: type + lista de tiers (1..N).
 struct TroopDef {
   int type = 0;  // 1 = Arqueiro, 2 = Arcabuz, 3 = Inimigo
@@ -58,12 +63,15 @@ class GameObject {
   float stateTimer;
   float timeToNextIdle;
   bool  reverseAnim = false;  // se true, animationTime decrementa em update()
+  bool  loopAnim    = true;   // false em clipes de ação (tiro/morte): tocam 1x e seguram
 
   GameObject(const TroopDef *def, Vector<3> startPos);
 
   void update(float deltaTime);
   void draw(unsigned int shaderId);
-  void setAnimation(const std::string &animName);
+  // loop=true (padrão): idle/locomoção, repetem. loop=false: clipes de ação
+  // (tiro, mira, morte, comando) tocam uma vez e seguram o último frame.
+  void setAnimation(const std::string &animName, bool loop = true);
   // Inicia animação tocando de trás para frente (startTime = ponto de início,
   // tipicamente a duração da animação). Útil para efeitos de "desfazer".
   void setAnimationReverse(const std::string &animName, float startTime);

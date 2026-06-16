@@ -11,11 +11,9 @@
 
 namespace combat {
 
-// Aplica `damage` a TODOS os inimigos vivos dentro de `radius` de (cx, cz) no
-// plano XZ. Marca o flash de acerto e mantém hp >= 0. O raio varia conforme a
-// origem do golpe (canhão, feitiço, etc.), por isso é parâmetro.
-//
-// enemies = slots de inimigos; ticks = posições do frame atual (alinhado).
+// Aplica `damage` a todos os inimigos vivos dentro de `radius` de (cx,cz) no XZ,
+// marca o flash de acerto e mantém hp >= 0. `radius` é parâmetro pois varia com a
+// origem do golpe (canhão, feitiço...). ticks = posições do frame atual.
 // Retorna a quantidade de inimigos atingidos.
 int applyAreaDamage(std::vector<EnemyInstance> &enemies,
                     const std::vector<EnemyTickResult> &ticks,

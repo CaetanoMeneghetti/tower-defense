@@ -85,7 +85,7 @@ KnightTickResult updateKnight(KnightInstance &knight,
         knight.slashing  = false;
         knight.dying     = true;
         knight.deathTimer = 0.0f;
-        knightModel.setAnimation("knightDeath");
+        knightModel.setAnimation("knightDeath", false);
       }
     }
   } else {

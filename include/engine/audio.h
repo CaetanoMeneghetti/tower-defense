@@ -1,11 +1,16 @@
 #pragma once
 #include <string>
+#include <vector>
 
 namespace audio {
   bool init();
   void shutdown();
 
-  // SFX fire-and-forget (toca no volume do engine)
+  // Pré-decodifica os SFX em memória (pool de vozes por arquivo). Sem isso, o
+  // 1º play de cada som decodifica do disco e gera latência. Chamar uma vez no init.
+  void preloadOneShots(const std::vector<std::string> &paths);
+
+  // SFX fire-and-forget. Se pré-carregado, dispara uma voz já decodificada.
   void playOneShot(const std::string &path);
 
   // One-shot com volume próprio (ex.: fanfare waveStart)

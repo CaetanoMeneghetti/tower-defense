@@ -28,17 +28,22 @@ GameObject::GameObject(const TroopDef *def, Vector<3> startPos) {
 void GameObject::upgrade() {
   if (!baseDef) return;
 
-  if (level < static_cast<int>(baseDef->tiers.size())) {
-    ++level;
-    model = baseDef->tiers[level - 1].model;
+  // Nível sobe até kMaxTroopLevel mesmo sem tier novo: tropas com 1 só modelo
+  // (canhão, comandante) ainda progridem em atributos. A troca de mesh é que é
+  // condicional ao tier existir; o ++level não.
+  if (level >= kMaxTroopLevel) return;
+  ++level;
 
+  const int tierCount = static_cast<int>(baseDef->tiers.size());
+  AnimatedModel *nextModel = (level <= tierCount) ? baseDef->tiers[level - 1].model
+                                                  : model;
+  if (nextModel && nextModel != model) {
+    model = nextModel;
     // Reanima do início para reaplicar a transformação de bone sob o novo mesh.
-    if (model) {
-      std::string tempAnim = currentAnimation;
-      currentAnimation = "";
-      setAnimation(tempAnim);
-      model->getTransformsAtTime(currentAnimation, 0.0f);
-    }
+    std::string tempAnim = currentAnimation;
+    currentAnimation = "";
+    setAnimation(tempAnim);
+    model->getTransformsAtTime(currentAnimation, 0.0f);
   }
 }
 
@@ -54,12 +59,13 @@ void GameObject::setIdleAnimations(const std::vector<std::string> &idles) {
   }
 }
 
-void GameObject::setAnimation(const std::string &animName) {
+void GameObject::setAnimation(const std::string &animName, bool loop) {
   if (currentAnimation != animName) {
     currentAnimation = animName;
     animationTime    = 0.0f;
   }
   reverseAnim = false;
+  loopAnim    = loop;
   stateTimer  = 0.0f;
 }
 
@@ -67,6 +73,7 @@ void GameObject::setAnimationReverse(const std::string &animName, float startTim
   currentAnimation = animName;
   animationTime    = startTime;
   reverseAnim      = true;
+  loopAnim         = false;  // clipe de ação tocado de trás pra frente, não repete
   stateTimer       = 0.0f;
 }
 
@@ -105,7 +112,7 @@ glm::mat4 GameObject::getBoneWorldTransform(const std::string &boneName) {
 
   // Múltiplos GOs compartilham o AnimatedModel; globalNodeTransforms_ é estado
   // compartilhado. Recalcula os bones para ESTE GO antes de ler o nó.
-  model->getTransformsAtTime(currentAnimation, animationTime);
+  model->getTransformsAtTime(currentAnimation, animationTime, loopAnim);
 
   Matrix<4, 4> trans = translate<4, 4>(position[0], position[1], position[2]);
   Matrix<4, 4> rotY = rotateY<4, 4>(-rotationY);
@@ -133,7 +140,7 @@ void GameObject::draw(unsigned int shaderId) {
   auto glModel = toOpenGLMatrix(finalModel);
   glUniformMatrix4fv(glGetUniformLocation(shaderId, "model"), 1, GL_FALSE, glModel.data());
 
-  auto transforms = model->getTransformsAtTime(currentAnimation, animationTime);
+  auto transforms = model->getTransformsAtTime(currentAnimation, animationTime, loopAnim);
 
   if (!transforms.empty()) {
     for (int i = 0; i < (int)transforms.size(); ++i) {

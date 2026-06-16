@@ -66,6 +66,7 @@ constexpr float kCannonRange         = 12.0f;
 constexpr float kCannonFireDuration  = 1.2f;   // duração da animação de disparo
 constexpr float kCannonCowerDuration = 2.0f;   // duração da animação de encolhimento
 constexpr int   kCannonDamage        = 40;
+constexpr float kCannonBaseReload    = 3.0f;   // recarga base no nível 1 (cooldown entre ciclos, em s)
 constexpr float kCannonSplashRadius  = 3.0f;   // raio do dano em área do disparo do canhão
 constexpr float kCannonBarrelOffset  = 1.0f;   // origem do mesh cannon.obj à frente do canhoneiro
 constexpr float kCannonBarrelScale   = 0.45f;  // escala do mesh cannon.obj

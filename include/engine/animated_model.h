@@ -41,7 +41,10 @@ class AnimatedModel {
 
   glm::mat4 getNodeGlobalTransform(const std::string &nodeName) const;
   void loadAnimation(const std::string &name, const std::string &path);
-  std::vector<glm::mat4> getTransformsAtTime(const std::string &animName, float timeInSeconds);
+  // loop=true: repete (fmod) — idle/run/walk. loop=false: tempo fixado em
+  // [0, duração] — clipes de ação (tiro/morte) tocam 1x e seguram o último frame.
+  std::vector<glm::mat4> getTransformsAtTime(const std::string &animName, float timeInSeconds,
+                                             bool loop = true);
   void draw(unsigned int shaderId);
 
  private:

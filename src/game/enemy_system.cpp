@@ -34,18 +34,17 @@ EnemyTickResult updateEnemy(EnemyInstance &enemy,
   result.reachedEnd    = false;
   result.diedThisFrame = false;
 
-  // --- Morte por HP (só dispara enquanto alive; evita re-trigger com hp<=0 persistente) ---
+  // --- Morte por HP (gate em alive evita re-trigger com hp<=0 persistente) ---
   if (enemy.alive && enemy.hp <= 0) {
     enemy.alive          = false;
     enemy.respawnTimer   = game_constants::kEnemyRespawnDelay;
     result.diedThisFrame = true;
-    enemyModel.setAnimation("death");
+    enemyModel.setAnimation("death", false);
   }
 
   // --- Veneno do feitiço círculo (dano contínuo) ---
-  // Tira game_constants::kSpellPoisonFraction (10%) da vida máxima por segundo
-  // enquanto poisonTimer > 0. hp é int, então acumulamos o dano fracionário em
-  // poisonAccum e descontamos a parte inteira a cada frame.
+  // Tira kSpellPoisonFraction (10%) da vida máx por segundo enquanto poisonTimer
+  // > 0. Como hp é int, acumula o fracionário em poisonAccum e desconta o inteiro.
   if (enemy.alive && enemy.poisonTimer > 0.0f) {
     enemy.poisonTimer -= deltaTime;
     if (enemy.poisonTimer < 0.0f) enemy.poisonTimer = 0.0f;
@@ -67,8 +66,8 @@ EnemyTickResult updateEnemy(EnemyInstance &enemy,
   } else {
     enemyModel.update(deltaTime);
 
-    // O timer sempre conta — serve para a animação de morte terminar.
-    // waveControlled só suprime o respawn automático ao fim do timer.
+    // O timer sempre conta (deixa a morte animar); waveControlled só suprime o
+    // respawn automático ao fim dele.
     if (enemy.respawnTimer > 0.0f) {
       enemy.respawnTimer -= deltaTime;
       if (enemy.respawnTimer < 0.0f) enemy.respawnTimer = 0.0f;
@@ -100,7 +99,7 @@ EnemyTickResult updateEnemy(EnemyInstance &enemy,
     enemy.alive          = false;
     enemy.respawnTimer   = game_constants::kEnemyRespawnDelay;
     result.diedThisFrame = true;
-    enemyModel.setAnimation("death");
+    enemyModel.setAnimation("death", false);
   }
 
   return result;
