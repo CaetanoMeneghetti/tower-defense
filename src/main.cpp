@@ -87,6 +87,7 @@ struct ShaderPipeline {
   GLuint previewShader = 0;
   GLuint animShader = 0;
   GLuint particleShader = 0;
+  GLuint treeShader = 0;
 
   GroundUniforms groundU{};
   ObjUniforms objU{};
@@ -109,6 +110,7 @@ bool loadAllShaders(ShaderPipeline &p) {
   p.previewShader  = createShaderProgram("data/shaders/preview.vert", "data/shaders/preview.frag");
   p.animShader     = createShaderProgram("data/shaders/anim_shader.vert", "data/shaders/anim_shader.frag");
   p.particleShader = createShaderProgram("data/shaders/particle.vert",    "data/shaders/particle.frag");
+  p.treeShader     = createShaderProgram("data/shaders/tree_instanced.vert", "data/shaders/shader.frag");
 
   if (!p.groundShader || !p.objShader || !p.pathShader || !p.lineShader || !p.lanternShader) {
     std::cout << "ERRO: Falha ao criar um ou mais shaders" << std::endl;
@@ -138,6 +140,7 @@ void deleteAllShaders(ShaderPipeline &p) {
   glDeleteProgram(p.skyShader);
   glDeleteProgram(p.animShader);
   glDeleteProgram(p.particleShader);
+  glDeleteProgram(p.treeShader);
 }
 
 // =============================================================================
@@ -175,6 +178,12 @@ void setStaticUniforms(const ShaderPipeline &p) {
   glUniform3fv(glGetUniformLocation(p.objShader, "fogColor"), 1, glm::value_ptr(fogColor));
   glUniform1f(glGetUniformLocation(p.objShader, "fogStart"), fogStart);
   glUniform1f(glGetUniformLocation(p.objShader, "fogEnd"), fogEnd);
+
+  // Árvores instanciadas usam shader.frag (mesma iluminação/fog do objShader).
+  glUseProgram(p.treeShader);
+  glUniform3fv(glGetUniformLocation(p.treeShader, "fogColor"), 1, glm::value_ptr(fogColor));
+  glUniform1f(glGetUniformLocation(p.treeShader, "fogStart"), fogStart);
+  glUniform1f(glGetUniformLocation(p.treeShader, "fogEnd"), fogEnd);
 
   glUseProgram(p.lanternShader);
   glUniform1i(glGetUniformLocation(p.lanternShader, "colorMap"),     0);
@@ -619,6 +628,9 @@ Mesh shieldMesh(shieldVertices);
   Mesh pathMesh = generatePathMesh(curvePoints, 2.0f);
 
   std::vector<TreeInstance> trees = placeTrees(curvePoints);
+  // Buffer de matrizes por-instância das árvores (1 draw call por mesh em vez de
+  // 1 por árvore). Anexa os atributos instanciados às VAOs de tronco/folhagem.
+  GLuint treeInstanceVBO = setupTreeInstancing(trees, treeLogMesh.get(), treeLeavesMesh.get());
 
   std::vector<PointLight> lanternLights;
   std::vector<LanternInstance> lanterns = placeLanterns(curvePoints, curveCache, lanternLights);
@@ -993,9 +1005,9 @@ Mesh shieldMesh(shieldVertices);
     uploadCommonUniforms(pipe.groundShader, moonLight, allLights, glmViewPos, glView, glProj);
     renderGround(grassMesh, tex.grass, tex.noise);
 
-    // ------- RENDER: árvores -------
-    uploadCommonUniforms(pipe.objShader, moonLight, allLights, glmViewPos, glView, glProj);
-    renderTrees(pipe.objShader, pipe.objU, trees,
+    // ------- RENDER: árvores (instanciadas) -------
+    uploadCommonUniforms(pipe.treeShader, moonLight, allLights, glmViewPos, glView, glProj);
+    renderTrees(pipe.treeShader, trees,
                 treeLogMesh.get(), tex.treeLog,
                 treeLeavesMesh.get(), tex.treeLeaves);
 
@@ -1212,6 +1224,7 @@ Mesh shieldMesh(shieldVertices);
   glDeleteTextures(1, &uiTextures.zombiePortrait);
   glDeleteVertexArrays(1, &rangeCircleVAO);
   glDeleteBuffers(1, &rangeCircleVBO);
+  glDeleteBuffers(1, &treeInstanceVBO);
   deleteGpuMesh(grassMesh);
   deleteGpuMesh(curveMesh);
   deleteGpuMesh(skyMesh);

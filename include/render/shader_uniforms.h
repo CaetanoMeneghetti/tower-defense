@@ -53,3 +53,9 @@ ObjUniforms makeObjUniforms(GLuint program);
 PathUniforms makePathUniforms(GLuint program);
 LineUniforms makeLineUniforms(GLuint program);
 LanternUniforms makeLanternUniforms(GLuint program);
+
+// Resolve (e memoiza) a location de um uniform por (program, nome). Para caminhos
+// quentes onde manter um struct dedicado é inconveniente — ex.: "tex", "hitFlash",
+// "finalBonesMatrices", e os uniforms de luz. Evita o round-trip ao driver que o
+// glGetUniformLocation faz a cada frame. O cache é estático/global ao processo.
+GLint cachedUniformLocation(GLuint program, const char *name);

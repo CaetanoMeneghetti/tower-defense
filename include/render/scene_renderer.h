@@ -124,13 +124,22 @@ void renderGround(const GpuMesh &grassMesh,
                   const GrassTextures &textures,
                   unsigned int noiseTexture);
 
-void renderTrees(GLuint objShader,
-                 const ObjUniforms &u,
+// Desenha todas as árvores via instancing: 1 draw call para os troncos e 1 para
+// as folhagens, em vez de 2 por árvore. As VAOs dos meshes devem ter os atributos
+// de matriz por-instância (locations 3..6) já anexados (ver setupTreeInstancing).
+void renderTrees(GLuint treeShader,
                  const std::vector<TreeInstance> &trees,
                  Mesh *treeLogMesh,
                  unsigned int treeLogTexture,
                  Mesh *treeLeavesMesh,
                  unsigned int treeLeavesTexture);
+
+// Cria o VBO de matrizes por-instância (uma por árvore) e anexa os atributos
+// instanciados (locations 3..6, divisor 1) às VAOs dos meshes informados.
+// Retorna o id do VBO (libere com glDeleteBuffers no cleanup).
+GLuint setupTreeInstancing(const std::vector<TreeInstance> &trees,
+                           Mesh *treeLogMesh,
+                           Mesh *treeLeavesMesh);
 
 void renderLanterns(const LanternUniforms &u,
                     const std::vector<LanternInstance> &lanterns,

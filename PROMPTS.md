@@ -145,3 +145,9 @@ Resultado: Função `rasterizeStrokes` em *spell_mode.cpp*. Calcula o bounding b
 **PROMPT**: Preciso de um modo de desenho de feitiço que congele câmera e gameplay enquanto ativo. F (borda de subida) togla o modo; LMB acumula traços; ENTER rasteriza, classifica e salva um .pgm de debug em captures/. O render deve desenhar os traços sobre a cena com ImGui foreground draw list, mostrar dica de teclas, e quando houver resultado exibir uma janelinha com classe, confiança e probabilidades, mais um crop 150×150 do input da CNN.
 
 Resultado: Funções `init`, `update` e `render` em *spell_mode.cpp*. `update` gerencia o toggle do modo, a coleta de traços e a classificação ao pressionar ENTER. `render` sobrepõe os traços na cena e exibe janela de resultado com crop do input da CNN.
+
+---
+
+**PROMPT**: Use cache para otimizar getTransformsAtTime, renderTrees e os glGetUniformLocation.
+
+Resultado: Praticamente todas as mudanças desse commit.

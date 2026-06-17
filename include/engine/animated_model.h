@@ -41,6 +41,13 @@ class AnimatedModel {
 
   glm::mat4 getNodeGlobalTransform(const std::string &nodeName) const;
   void loadAnimation(const std::string &name, const std::string &path);
+
+  // Acessores para o cache de pose do GameObject. globalNodeTransforms_ é
+  // sobrescrito a cada getTransformsAtTime (estado compartilhado entre GOs que
+  // usam o mesmo modelo); o GameObject tira um snapshot logo após calcular a
+  // própria pose. globalInverse() é constante após o load.
+  const std::map<std::string, glm::mat4> &nodeTransforms() const { return globalNodeTransforms_; }
+  const glm::mat4 &globalInverse() const { return globalInverseTransform_; }
   // loop=true: repete (fmod) — idle/run/walk. loop=false: tempo fixado em
   // [0, duração] — clipes de ação (tiro/morte) tocam 1x e seguram o último frame.
   std::vector<glm::mat4> getTransformsAtTime(const std::string &animName, float timeInSeconds,

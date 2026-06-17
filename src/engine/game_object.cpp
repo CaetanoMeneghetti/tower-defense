@@ -10,6 +10,7 @@
 #include "math/matrix_ops.h"
 #include "math/opengl_utils.h"
 #include "math/transforms.h"
+#include "render/shader_uniforms.h"
 
 GameObject::GameObject(const TroopDef *def, Vector<3> startPos) {
   baseDef = def;
@@ -107,12 +108,39 @@ void GameObject::update(float deltaTime) {
   }
 }
 
+void GameObject::ensurePose() {
+  if (!model) return;
+  // Cache válido se nada que afeta o esqueleto mudou desde o último cálculo.
+  if (poseValid_ && poseModel_ == model && poseLoop_ == loopAnim &&
+      poseTime_ == animationTime && poseAnim_ == currentAnimation) {
+    return;
+  }
+  // getTransformsAtTime preenche finalBoneMatrices_ (retornado) e, como efeito
+  // colateral, globalNodeTransforms_ no modelo compartilhado. Tiramos o snapshot
+  // imediatamente — antes que outro GO que use o mesmo modelo o sobrescreva.
+  poseBones_ = model->getTransformsAtTime(currentAnimation, animationTime, loopAnim);
+  if (cacheNodes_) {
+    poseNodes_ = model->nodeTransforms();
+    poseGlobalInverse_ = model->globalInverse();
+  }
+  poseModel_ = model;
+  poseAnim_  = currentAnimation;
+  poseTime_  = animationTime;
+  poseLoop_  = loopAnim;
+  poseValid_ = true;
+}
+
 glm::mat4 GameObject::getBoneWorldTransform(const std::string &boneName) {
   if (!model) return glm::mat4(1.0f);
 
-  // Múltiplos GOs compartilham o AnimatedModel; globalNodeTransforms_ é estado
-  // compartilhado. Recalcula os bones para ESTE GO antes de ler o nó.
-  model->getTransformsAtTime(currentAnimation, animationTime, loopAnim);
+  // Primeira consulta de bone neste GO: passa a snapshotar o mapa de nós e força
+  // um recálculo para capturá-lo (inimigos puros nunca chegam aqui e não pagam
+  // a cópia do mapa).
+  if (!cacheNodes_) {
+    cacheNodes_ = true;
+    poseValid_ = false;
+  }
+  ensurePose();
 
   Matrix<4, 4> trans = translate<4, 4>(position[0], position[1], position[2]);
   Matrix<4, 4> rotY = rotateY<4, 4>(-rotationY);
@@ -123,13 +151,19 @@ glm::mat4 GameObject::getBoneWorldTransform(const std::string &boneName) {
   auto glModelArray = toOpenGLMatrix(finalModel);
   glm::mat4 glmModel = glm::make_mat4(glModelArray.data());
 
-  glm::mat4 boneTransform = model->getNodeGlobalTransform(boneName);
+  // Equivale ao antigo getNodeGlobalTransform: globalInverse * transform do nó,
+  // ou identidade se o bone não existe — mas lido do snapshot, sem recursão.
+  glm::mat4 boneTransform(1.0f);
+  auto it = poseNodes_.find(boneName);
+  if (it != poseNodes_.end()) boneTransform = poseGlobalInverse_ * it->second;
 
   return glmModel * boneTransform;
 }
 
 void GameObject::draw(unsigned int shaderId) {
   if (!isActive || !model) return;
+
+  ensurePose();
 
   Matrix<4, 4> trans = translate<4, 4>(position[0], position[1], position[2]);
   Matrix<4, 4> rotY = rotateY<4, 4>(-rotationY);
@@ -138,16 +172,17 @@ void GameObject::draw(unsigned int shaderId) {
   Matrix<4, 4> finalModel = trans * rotY * fixRotX * scl;
 
   auto glModel = toOpenGLMatrix(finalModel);
-  glUniformMatrix4fv(glGetUniformLocation(shaderId, "model"), 1, GL_FALSE, glModel.data());
+  glUniformMatrix4fv(cachedUniformLocation(shaderId, "model"), 1, GL_FALSE, glModel.data());
 
-  auto transforms = model->getTransformsAtTime(currentAnimation, animationTime, loopAnim);
-
-  if (!transforms.empty()) {
-    for (int i = 0; i < (int)transforms.size(); ++i) {
-      std::string n = "finalBonesMatrices[" + std::to_string(i) + "]";
-      glUniformMatrix4fv(
-          glGetUniformLocation(shaderId, n.c_str()), 1, GL_FALSE, glm::value_ptr(transforms[i]));
-    }
+  if (!poseBones_.empty()) {
+    // Sobe TODAS as matrizes de osso de uma vez: os elementos de um uniform array
+    // têm locations sequenciais, então um único glUniformMatrix4fv com count=N
+    // cobre o array inteiro. Antes isto era um loop de 100 ossos, cada iteração
+    // com uma alocação de std::string + um glGetUniformLocation (lookup no driver)
+    // + um upload — ~100x mais chamadas por personagem, por frame.
+    glUniformMatrix4fv(cachedUniformLocation(shaderId, "finalBonesMatrices"),
+                       static_cast<GLsizei>(poseBones_.size()), GL_FALSE,
+                       glm::value_ptr(poseBones_[0]));
   }
 
   model->draw(shaderId);

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <map>
 #include <string>
 #include <vector>
 
@@ -85,4 +86,27 @@ class GameObject {
 
  private:
   void pickRandomIdle();
+
+  // --- Cache de pose por frame ---
+  // Recalcular o esqueleto (AnimatedModel::getTransformsAtTime) é caro: faz uma
+  // recursão pela árvore de nós com interpolação de quaternion. Antes isso rodava
+  // 2-3x por frame para unidades com arma (uma no draw() e uma por mão no
+  // getBoneWorldTransform()). A pose só depende de (model, animação, tempo, loop),
+  // então memoizamos e só recomputamos quando uma dessas chaves muda — na prática
+  // 1x/frame, logo após o update() avançar animationTime.
+  //
+  // poseNodes_ (snapshot do mapa de nós) só é preenchido para unidades que de fato
+  // consultam bones de anexo (cacheNodes_); inimigos puros só usam poseBones_ e
+  // não pagam a cópia do mapa.
+  void ensurePose();
+
+  std::vector<glm::mat4> poseBones_;
+  std::map<std::string, glm::mat4> poseNodes_;
+  glm::mat4 poseGlobalInverse_ = glm::mat4(1.0f);
+  AnimatedModel *poseModel_ = nullptr;
+  std::string poseAnim_;
+  float poseTime_ = -1.0f;
+  bool poseLoop_ = true;
+  bool poseValid_ = false;
+  bool cacheNodes_ = false;
 };

@@ -37,11 +37,11 @@ void uploadModelMatrix(GLint modelLoc, const Vector<3> &pos, float rotY, float u
 void bindColorAndNormal(GLuint shader, unsigned int color, unsigned int normal) {
   glActiveTexture(GL_TEXTURE0);
   glBindTexture(GL_TEXTURE_2D, color);
-  glUniform1i(glGetUniformLocation(shader, "tex"), 0);
+  glUniform1i(cachedUniformLocation(shader, "tex"), 0);
 
   glActiveTexture(GL_TEXTURE1);
   glBindTexture(GL_TEXTURE_2D, normal);
-  glUniform1i(glGetUniformLocation(shader, "normalMap"), 1);
+  glUniform1i(cachedUniformLocation(shader, "normalMap"), 1);
 }
 
 }  // namespace
@@ -55,8 +55,8 @@ void uploadCommonUniforms(GLuint program,
   glUseProgram(program);
   applyDirectionalLight(program, moonLight, viewPos);
   applyPointLights(program, lanternLights);
-  glUniformMatrix4fv(glGetUniformLocation(program, "view"), 1, GL_FALSE, glView.data());
-  glUniformMatrix4fv(glGetUniformLocation(program, "projection"), 1, GL_FALSE, glProj.data());
+  glUniformMatrix4fv(cachedUniformLocation(program, "view"), 1, GL_FALSE, glView.data());
+  glUniformMatrix4fv(cachedUniformLocation(program, "projection"), 1, GL_FALSE, glProj.data());
 }
 
 // =============================================================================
@@ -80,11 +80,11 @@ void renderEnemy(GLuint shaderAnim,
   const float flash = (game_constants::kEnemyHitFlashDuration > 0.0f)
                           ? (enemy.hitFlashTime / game_constants::kEnemyHitFlashDuration)
                           : 0.0f;
-  glUniform1f(glGetUniformLocation(shaderAnim, "hitFlash"), flash);
+  glUniform1f(cachedUniformLocation(shaderAnim, "hitFlash"), flash);
   enemyModel.draw(shaderAnim);
 
   // Reseta pra nao vazar flash para os defensores no mesmo shader.
-  glUniform1f(glGetUniformLocation(shaderAnim, "hitFlash"), 0.0f);
+  glUniform1f(cachedUniformLocation(shaderAnim, "hitFlash"), 0.0f);
 }
 
 
@@ -103,7 +103,7 @@ void renderKnight(GLuint shaderAnim,
   knightModel.position = knightPos;
   knightModel.rotationY = knightAngle;
 
-  glUniform1f(glGetUniformLocation(shaderAnim, "hitFlash"), 0.0f);
+  glUniform1f(cachedUniformLocation(shaderAnim, "hitFlash"), 0.0f);
   knightModel.draw(shaderAnim);
 }
 
@@ -175,7 +175,7 @@ void renderKnightWeapons(GLuint objShader,
   glUniformMatrix4fv(u.model, 1, GL_FALSE, glm::value_ptr(rightHand * swordOffset));
   glActiveTexture(GL_TEXTURE0);
   glBindTexture(GL_TEXTURE_2D, swordTexture);
-  glUniform1i(glGetUniformLocation(objShader, "tex"), 0);
+  glUniform1i(cachedUniformLocation(objShader, "tex"), 0);
   swordMesh.draw();
 
   // --- ESCUDO (mão esquerda) ---
@@ -189,7 +189,7 @@ void renderKnightWeapons(GLuint objShader,
   glUniformMatrix4fv(u.model, 1, GL_FALSE, glm::value_ptr(leftHand * shieldOffset));
   glActiveTexture(GL_TEXTURE0);
   glBindTexture(GL_TEXTURE_2D, shieldTexture);
-  glUniform1i(glGetUniformLocation(objShader, "tex"), 0);
+  glUniform1i(cachedUniformLocation(objShader, "tex"), 0);
   shieldMesh.draw();
 }
 
@@ -257,7 +257,7 @@ void renderDefenderWeapons(GLuint objShader,
       glUniformMatrix4fv(u.model, 1, GL_FALSE, glm::value_ptr(handWorldMatrix * offset));
       glActiveTexture(GL_TEXTURE0);
       glBindTexture(GL_TEXTURE_2D, bowTexture);
-      glUniform1i(glGetUniformLocation(objShader, "tex"), 0);
+      glUniform1i(cachedUniformLocation(objShader, "tex"), 0);
       bowMesh.draw();
 
     } else if (unit.type == defender_types::kArquebus) {
@@ -269,7 +269,7 @@ void renderDefenderWeapons(GLuint objShader,
       glUniformMatrix4fv(u.model, 1, GL_FALSE, glm::value_ptr(handWorldMatrix * tier.weaponOffset));
       glActiveTexture(GL_TEXTURE0);
       glBindTexture(GL_TEXTURE_2D, tier.weaponTexture);
-      glUniform1i(glGetUniformLocation(objShader, "tex"), 0);
+      glUniform1i(cachedUniformLocation(objShader, "tex"), 0);
       tier.weaponMesh->draw();
 
     } else if (unit.type == defender_types::kCannon) {
@@ -298,7 +298,7 @@ void renderDefenderWeapons(GLuint objShader,
       glUniformMatrix4fv(u.model, 1, GL_FALSE, glm::value_ptr(handWorldMatrix * torchOffset));
       glActiveTexture(GL_TEXTURE0);
       glBindTexture(GL_TEXTURE_2D, torchTexture);
-      glUniform1i(glGetUniformLocation(objShader, "tex"), 0);
+      glUniform1i(cachedUniformLocation(objShader, "tex"), 0);
       torchMesh.draw();
     }
   }
@@ -318,7 +318,7 @@ void renderCannonBarrels(GLuint objShader,
 
   glActiveTexture(GL_TEXTURE0);
   glBindTexture(GL_TEXTURE_2D, cannonBarrelTex);
-  glUniform1i(glGetUniformLocation(objShader, "tex"), 0);
+  glUniform1i(cachedUniformLocation(objShader, "tex"), 0);
 
   for (const auto &unit : defenders) {
     if (unit.type != defender_types::kCannon) continue;
@@ -388,8 +388,49 @@ void renderGround(const GpuMesh &grassMesh,
 // ÁRVORES (tronco + folhagem)
 // =============================================================================
 
-void renderTrees(GLuint objShader,
-                 const ObjUniforms &u,
+GLuint setupTreeInstancing(const std::vector<TreeInstance> &trees,
+                           Mesh *treeLogMesh,
+                           Mesh *treeLeavesMesh) {
+  // Uma matriz de modelo por árvore, no MESMO formato que o caminho antigo subia
+  // via uniform (toOpenGLMatrix de translate*rotateY*scale) — garante bytes
+  // idênticos aos do path não-instanciado.
+  std::vector<glm::mat4> instanceData;
+  instanceData.reserve(trees.size());
+  for (const auto &tree : trees) {
+    Matrix<4, 4> m = translate<4, 4>(tree.position[0], tree.position[1], tree.position[2]) *
+                     rotateY<4, 4>(tree.rotationY) *
+                     scale<4, 4>(tree.scale, tree.scale, tree.scale);
+    auto gl = toOpenGLMatrix(m);
+    instanceData.push_back(glm::make_mat4(gl.data()));
+  }
+
+  GLuint instanceVBO = 0;
+  glGenBuffers(1, &instanceVBO);
+  glBindBuffer(GL_ARRAY_BUFFER, instanceVBO);
+  glBufferData(GL_ARRAY_BUFFER, instanceData.size() * sizeof(glm::mat4),
+               instanceData.empty() ? nullptr : instanceData.data(), GL_STATIC_DRAW);
+
+  // Anexa o mesmo buffer às VAOs de tronco e folhagem: uma mat4 ocupa 4 vec4
+  // (locations 3..6), avançando 1 por instância (divisor 1).
+  auto attach = [&](Mesh *mesh) {
+    if (!mesh) return;
+    glBindVertexArray(mesh->vao);
+    glBindBuffer(GL_ARRAY_BUFFER, instanceVBO);
+    for (int i = 0; i < 4; ++i) {
+      glEnableVertexAttribArray(3 + i);
+      glVertexAttribPointer(3 + i, 4, GL_FLOAT, GL_FALSE, sizeof(glm::mat4),
+                            (void *)(static_cast<size_t>(i) * sizeof(glm::vec4)));
+      glVertexAttribDivisor(3 + i, 1);
+    }
+    glBindVertexArray(0);
+  };
+  attach(treeLogMesh);
+  attach(treeLeavesMesh);
+
+  return instanceVBO;
+}
+
+void renderTrees(GLuint treeShader,
                  const std::vector<TreeInstance> &trees,
                  Mesh *treeLogMesh,
                  unsigned int treeLogTexture,
@@ -397,24 +438,25 @@ void renderTrees(GLuint objShader,
                  unsigned int treeLeavesTexture) {
   if (trees.empty() || (treeLogMesh == nullptr && treeLeavesMesh == nullptr)) return;
 
-  auto drawInstances = [&](Mesh *mesh, unsigned int tex) {
+  const GLsizei count = static_cast<GLsizei>(trees.size());
+
+  auto drawInstanced = [&](Mesh *mesh, unsigned int tex) {
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, tex);
-    glUniform1i(glGetUniformLocation(objShader, "tex"), 0);
-    for (const auto &tree : trees) {
-      uploadModelMatrix(u.model, tree.position, tree.rotationY, tree.scale);
-      mesh->draw();
-    }
+    glUniform1i(cachedUniformLocation(treeShader, "tex"), 0);
+    glBindVertexArray(mesh->vao);
+    glDrawArraysInstanced(GL_TRIANGLES, 0, static_cast<GLsizei>(mesh->vertices.size()), count);
+    glBindVertexArray(0);
   };
 
   if (treeLogMesh != nullptr && treeLogTexture != 0) {
-    drawInstances(treeLogMesh, treeLogTexture);
+    drawInstanced(treeLogMesh, treeLogTexture);
   }
 
   if (treeLeavesMesh != nullptr && treeLeavesTexture != 0) {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    drawInstances(treeLeavesMesh, treeLeavesTexture);
+    drawInstanced(treeLeavesMesh, treeLeavesTexture);
     glDisable(GL_BLEND);
   }
 }
