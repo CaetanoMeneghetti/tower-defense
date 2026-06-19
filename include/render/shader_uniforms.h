@@ -59,3 +59,8 @@ LanternUniforms makeLanternUniforms(GLuint program);
 // "finalBonesMatrices", e os uniforms de luz. Evita o round-trip ao driver que o
 // glGetUniformLocation faz a cada frame. O cache é estático/global ao processo.
 GLint cachedUniformLocation(GLuint program, const char *name);
+
+// Remove um programa do cache. DEVE ser chamada antes/depois de glDeleteProgram,
+// pois o OpenGL recicla IDs de programa: sem isso, um programa novo que herde o ID
+// reciclado leria as locations (stale) do programa destruído.
+void invalidateUniformLocationCache(GLuint program);

@@ -163,6 +163,10 @@ void MainMenu::renderScene(int fbW, int fbH) {
 }
 
 void MainMenu::unloadScene() {
+  // IDs de programa são reciclados pelo OpenGL — limpa o cache de uniforms para
+  // que os shaders do jogo (que herdam esses IDs) não leiam locations stale.
+  invalidateUniformLocationCache(groundShader_);
+  invalidateUniformLocationCache(animShader_);
   glDeleteProgram(groundShader_);
   glDeleteProgram(animShader_);
   deleteGpuMesh(groundMesh_);
@@ -203,16 +207,18 @@ void MainMenu::renderUI(float W, float H, bool &outEnter, bool &outQuit) {
       ImVec2(0, 0), ImVec2(W, H), IM_COL32(4, 6, 15, 140));
   ImGui::End();
 
-  // Center panel
-  const float panelW = 520.0f;
-  const float panelH = 350.0f;
-  ImGui::SetNextWindowPos(ImVec2((W - panelW) * 0.5f, (H - panelH) * 0.5f));
-  ImGui::SetNextWindowSize(ImVec2(panelW, panelH));
+  // Center panel — largura fixa, altura automática (acompanha a fonte/conteúdo
+  // sem estourar a janela). O pivô (0.5, 0.5) mantém o painel centralizado
+  // independentemente da altura que o conteúdo exigir.
+  const float panelW = 560.0f;
+  ImGui::SetNextWindowPos(ImVec2(W * 0.5f, H * 0.5f), ImGuiCond_Always,
+                          ImVec2(0.5f, 0.5f));
+  ImGui::SetNextWindowSizeConstraints(ImVec2(panelW, 0.0f), ImVec2(panelW, H));
   ImGui::SetNextWindowBgAlpha(0.92f);
   ImGui::Begin("##mm_panel", nullptr,
       ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoSavedSettings |
-      ImGuiWindowFlags_NoNav);
+      ImGuiWindowFlags_NoNav | ImGuiWindowFlags_AlwaysAutoResize);
 
   ImGui::Spacing();
   const char *title = "1348 d.C.: FERRO E SANGUE";
@@ -227,8 +233,6 @@ void MainMenu::renderUI(float W, float H, bool &outEnter, bool &outQuit) {
   ImGui::SetCursorPosX((panelW - ImGui::CalcTextSize(sub).x) * 0.5f);
   ImGui::TextColored(kMenuMuted, "%s", sub);
 
-  ImGui::Spacing();
-  ImGui::Spacing();
   ImGui::Spacing();
   ImGui::Spacing();
 
@@ -252,9 +256,13 @@ void MainMenu::renderUI(float W, float H, bool &outEnter, bool &outQuit) {
   ImGui::Separator();
   ImGui::Spacing();
 
-  const char *hint = "WASD: mover   |   Mouse: olhar   |   T: posicionar tropas";
-  ImGui::SetCursorPosX((panelW - ImGui::CalcTextSize(hint).x) * 0.5f);
-  ImGui::TextColored(kMenuMuted, "%s", hint);
+  // Dica em duas linhas: com a fonte serifada cabe na largura sem estourar.
+  const char *hint1 = "WASD: mover     Mouse: olhar";
+  const char *hint2 = "T: posicionar tropas";
+  ImGui::SetCursorPosX((panelW - ImGui::CalcTextSize(hint1).x) * 0.5f);
+  ImGui::TextColored(kMenuMuted, "%s", hint1);
+  ImGui::SetCursorPosX((panelW - ImGui::CalcTextSize(hint2).x) * 0.5f);
+  ImGui::TextColored(kMenuMuted, "%s", hint2);
 
   ImGui::End();
 }

@@ -96,6 +96,10 @@ constexpr float kKnightSpeed = 1.5f;
 constexpr int   kKnightSlashDamage = 10;
 constexpr float kKnightSlashInterval = 0.8f;
 constexpr float kKnightCollisionRadius = 1.2f;
+// Semi-extensões (AABB no plano XZ) da colisão de combate corpo-a-corpo. A soma
+// das duas reproduz o antigo raio de contato (kKnightCollisionRadius).
+constexpr float kKnightMeleeHalfExtent = kKnightCollisionRadius * 0.5f;
+constexpr float kEnemyMeleeHalfExtent  = kKnightCollisionRadius * 0.5f;
 
 // --- Comandante (defender colocável)
 constexpr int   kKnightCommanderCost         = 80;

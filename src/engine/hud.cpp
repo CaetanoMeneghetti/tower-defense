@@ -1,6 +1,7 @@
 #include "engine/hud.h"
 
 #include <cstdio>
+#include <filesystem>
 
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
@@ -29,6 +30,32 @@ void Hud::init(GLFWwindow *window) {
   ImGui::CreateContext();
   ImGuiIO &io = ImGui::GetIO();
   io.IniFilename = nullptr;
+
+  // Fonte Cinzel (serifada medieval) como padrão de TODOS os textos do jogo.
+  // A primeira fonte adicionada vira a default do ImGui. As faixas de glifos
+  // padrão (0x20-0xFF) já cobrem os acentos do português. Se o arquivo ainda
+  // não estiver presente, o ImGui cai na fonte embutida automaticamente.
+  {
+    namespace fs = std::filesystem;
+    const char *fontCandidates[] = {
+        // "data/fonts/Cinzel-Regular.ttf",
+        "data/fonts/Cinzel-VariableFont_wght.ttf",
+        // "data/fonts/Cinzel.ttf",
+    };
+    const float kFontSizePx = 18.0f;
+    bool loaded = false;
+    for (const char *path : fontCandidates) {
+      if (fs::exists(path)) {
+        if (io.Fonts->AddFontFromFileTTF(path, kFontSizePx) != nullptr) {
+          loaded = true;
+          break;
+        }
+      }
+    }
+    if (!loaded) {
+      std::printf("[hud] Cinzel nao encontrada em data/fonts/; usando fonte padrao.\n");
+    }
+  }
 
   ImGui_ImplGlfw_InitForOpenGL(window, true);
   ImGui_ImplOpenGL3_Init("#version 330");
@@ -385,18 +412,18 @@ void Hud::renderBuyMenu(AppState &state) {
 void Hud::renderControlsLegend(const AppState &state) {
   struct KeyHint { const char *key; const char *desc; };
   const KeyHint hints[] = {
-      {"M",    "Menu de compra"},
-      {"C",    "Trocar c\xc3\xa2mera"},
-      {"F",    "Desenhar feiti\xc3\xa7o"},
-      {"T",    "Curva (debug)"},
-      {"Y",    "Pular intermiss\xc3\xa3o"},
-      {"WASD", "Mover c\xc3\xa2mera"},
+      {"M",    "  Menu de compra"},
+      {"C",    "  Trocar c\xc3\xa2mera"},
+      {"F",    "  Desenhar feiti\xc3\xa7o"},
+      {"T",    "  Curva (debug)"},
+      {"Y",    "  Pular intermiss\xc3\xa3o"},
+      {"WASD", "  Mover c\xc3\xa2mera"},
   };
   const int n = (int)(sizeof(hints) / sizeof(hints[0]));
 
   const float lineH = ImGui::GetTextLineHeightWithSpacing();
   const float pad = 10.0f;
-  const float winW = 200.0f;
+  const float winW = 220.0f;
   const float winH = pad * 2.0f + lineH * (n + 1);
 
   ImGuiWindowFlags flags =

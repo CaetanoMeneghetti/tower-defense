@@ -46,6 +46,7 @@ struct SpellCast {
   float life;              // tempo restante do visual (s)
   float maxLife;           // duração total (para o fade)
   bool  applied = false;   // efeito de gameplay já aplicado?
+  bool  denied  = false;   // forma reconhecida sem carga: piscada vermelha, sem efeito
 };
 
 struct SpellMode {

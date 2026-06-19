@@ -16,6 +16,12 @@ namespace collisions {
 // Retorna true se dois pontos no plano XZ estão a no máximo `range` entre si.
 bool inRange(float ax, float az, float bx, float bz, float range);
 
+// Retorna true se duas bounding-boxes alinhadas aos eixos (AABB) no plano XZ se
+// sobrepõem. Cada caixa é dada pelo seu centro (x, z) e sua semi-extensão
+// (metade do lado). Usado na colisão de combate corpo-a-corpo.
+bool aabbOverlap(float ax, float az, float aHalf,
+                 float bx, float bz, float bHalf);
+
 // Índice do inimigo vivo mais próximo de (ox, oz).
 // `outDistSq` recebe a distância quadrática; FLT_MAX se nenhum vivo.
 // Retorna -1 se não houver nenhum inimigo vivo.

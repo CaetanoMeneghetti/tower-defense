@@ -194,7 +194,7 @@ void SelectionScreen::loadScene() {
 
   // --- Weapons ---------------------------------------------------------------
   bowTex_   = loadTexture("data/textures/bow.jpg");
-  swordTex_ = loadTexture("data/textures/knightattachment.png");
+  swordTex_ = loadTexture("data/textures/knight_attachment.png");
 
   std::vector<Vertex> bowVerts;
   if (loadObj("data/models/archer/bow.obj", bowVerts) && !bowVerts.empty())
@@ -450,6 +450,11 @@ void SelectionScreen::unloadScene() {
     glDeleteBuffers(1, &wallMesh_->vbo);
   }
 
+  // IDs de programa são reciclados pelo OpenGL — limpa o cache de uniforms para
+  // que os shaders do jogo (que herdam esses IDs) não leiam locations stale.
+  invalidateUniformLocationCache(objShader_);
+  invalidateUniformLocationCache(animShader_);
+  invalidateUniformLocationCache(particleShader_);
   glDeleteProgram(objShader_);
   glDeleteProgram(animShader_);
   glDeleteProgram(particleShader_);
@@ -502,16 +507,18 @@ const FactionInfo kFactionInfo[3] = {
 }  // namespace
 
 void SelectionScreen::renderUI(float W, float H, bool &outBegin, bool &outBack) {
-  // --- Bottom-center selection strip
-  const float panelW = 560.0f;
-  const float panelH = 230.0f;
-  ImGui::SetNextWindowPos(ImVec2((W - panelW) * 0.5f, H - panelH - 30.0f));
-  ImGui::SetNextWindowSize(ImVec2(panelW, panelH));
+  // --- Bottom-center selection strip — largura fixa, altura automática.
+  // Pivô (0.5, 1.0) ancora a borda inferior 30px acima do fundo da janela e deixa
+  // o painel crescer para cima conforme o conteúdo/fonte, sem estourar a tela.
+  const float panelW = 620.0f;
+  ImGui::SetNextWindowPos(ImVec2(W * 0.5f, H - 30.0f), ImGuiCond_Always,
+                          ImVec2(0.5f, 1.0f));
+  ImGui::SetNextWindowSizeConstraints(ImVec2(panelW, 0.0f), ImVec2(panelW, H));
   ImGui::SetNextWindowBgAlpha(0.90f);
   ImGui::Begin("##sel_panel", nullptr,
       ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoSavedSettings |
-      ImGuiWindowFlags_NoNav);
+      ImGuiWindowFlags_NoNav | ImGuiWindowFlags_AlwaysAutoResize);
 
   // Title row
   ImGui::Spacing();
@@ -568,7 +575,11 @@ void SelectionScreen::renderUI(float W, float H, bool &outBegin, bool &outBack) 
   ImGui::Spacing();
 
   const FactionInfo &fi = kFactionInfo[selectedGeneral_];
-  const float labelX = (panelW - 420.0f) * 0.5f;
+  const float labelX = 40.0f;
+  // Quebra os valores dentro do painel para que descrições longas não saiam pela
+  // borda direita com a fonte serifada.
+  ImGui::PushTextWrapPos(panelW - 24.0f);
+
   ImGui::SetCursorPosX(labelX);
   ImGui::TextColored(kSelMuted,  "Arma:");
   ImGui::SameLine();
@@ -583,6 +594,8 @@ void SelectionScreen::renderUI(float W, float H, bool &outBegin, bool &outBack) 
   ImGui::TextColored(kSelMuted, "Especialidade:");
   ImGui::SameLine();
   ImGui::TextColored(kSelCream, " %s", fi.especialidade);
+
+  ImGui::PopTextWrapPos();
 
   ImGui::Spacing();
   ImGui::Separator();

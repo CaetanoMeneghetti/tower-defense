@@ -199,6 +199,19 @@ void update(SpellMode &s,
       cast.maxLife = game_constants::kSpellVisualDuration;
       cast.applied = false;  // main aplica o efeito aos inimigos neste frame
       s.casts.push_back(cast);
+    } else if (hasBounds && cls >= 0 && cls < 3 && state.spellCharges[cls] == 0) {
+      // Forma reconhecida, mas sem carga daquele feitiço: feedback negativo
+      // (piscada vermelha na forma). applied=true para o main não aplicar efeito.
+      SpellCast denied;
+      denied.shape   = cls;
+      denied.centerX = drawCx;
+      denied.centerY = drawCy;
+      denied.radius  = drawR;
+      denied.life    = game_constants::kSpellVisualDuration;
+      denied.maxLife = game_constants::kSpellVisualDuration;
+      denied.applied = true;
+      denied.denied  = true;
+      s.casts.push_back(denied);
     }
 
     // ---- Salva o canvas 50x50 como PGM em captures/ ----
@@ -227,6 +240,13 @@ void update(SpellMode &s,
     }
 
     s.strokes.clear();
+
+    // Após confirmar o desenho, sai do contexto de desenho de feitiço.
+    state.isDrawingSpell = false;
+    if (state.cameraMode == CameraMode::Free) {
+      glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+      state.firstMouse = true;
+    }
   }
   s.enterKeyDown = enterNow;
 
@@ -262,11 +282,21 @@ void render(const SpellMode &s, const AppState &state) {
     float t = (c.maxLife > 0.0f) ? (c.life / c.maxLife) : 0.0f;
     if (t < 0.0f) t = 0.0f;
     if (t > 1.0f) t = 1.0f;
-    const float *rgb = kSpellColors[c.shape];
-    int a    = static_cast<int>(200.0f * t);   // contorno
-    int aFill = static_cast<int>(70.0f * t);    // preenchimento
-    ImU32 line = IM_COL32(int(rgb[0] * 255), int(rgb[1] * 255), int(rgb[2] * 255), a);
-    ImU32 fill = IM_COL32(int(rgb[0] * 255), int(rgb[1] * 255), int(rgb[2] * 255), aFill);
+    ImU32 line, fill;
+    if (c.denied) {
+      // Feedback negativo: a forma pisca em vermelho (feitiço sem carga).
+      float blink = 0.5f + 0.5f * std::sin(c.life * 30.0f);
+      int a     = static_cast<int>(230.0f * t * blink);
+      int aFill = static_cast<int>(90.0f * t * blink);
+      line = IM_COL32(255, 45, 45, a);
+      fill = IM_COL32(255, 45, 45, aFill);
+    } else {
+      const float *rgb = kSpellColors[c.shape];
+      int a    = static_cast<int>(200.0f * t);   // contorno
+      int aFill = static_cast<int>(70.0f * t);    // preenchimento
+      line = IM_COL32(int(rgb[0] * 255), int(rgb[1] * 255), int(rgb[2] * 255), a);
+      fill = IM_COL32(int(rgb[0] * 255), int(rgb[1] * 255), int(rgb[2] * 255), aFill);
+    }
     const float th = 4.0f;
     if (c.shape == 1) {  // quadrado
       ImVec2 p0(c.centerX - c.radius, c.centerY - c.radius);

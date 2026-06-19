@@ -1,6 +1,7 @@
 #include "game/collisions.h"
 
 #include <cfloat>
+#include <cmath>
 
 #include "game/path_navigation.h"
 
@@ -9,6 +10,12 @@ namespace collisions {
 bool inRange(float ax, float az, float bx, float bz, float range) {
   const float dx = bx - ax, dz = bz - az;
   return (dx * dx + dz * dz) <= (range * range);
+}
+
+bool aabbOverlap(float ax, float az, float aHalf,
+                 float bx, float bz, float bHalf) {
+  return std::fabs(ax - bx) <= (aHalf + bHalf) &&
+         std::fabs(az - bz) <= (aHalf + bHalf);
 }
 
 int closestAliveEnemy(const std::vector<EnemyInstance> &enemies,

@@ -79,8 +79,8 @@
 namespace {
 
 // Set to false to skip the pre-game screens and jump straight into gameplay.
-static constexpr bool kEnableMainMenu        = false;
-static constexpr bool kEnableSelectionScreen = false;
+static constexpr bool kEnableMainMenu        = true;
+static constexpr bool kEnableSelectionScreen = true;
 
 // Grama instanciada com balanço procedural (pode ser desativada para ganhar FPS).
 static constexpr bool kEnableGrass           = true;
@@ -147,16 +147,12 @@ bool loadAllShaders(ShaderPipeline &p) {
 }
 
 void deleteAllShaders(ShaderPipeline &p) {
-  glDeleteProgram(p.groundShader);
-  glDeleteProgram(p.objShader);
-  glDeleteProgram(p.pathShader);
-  glDeleteProgram(p.lineShader);
-  glDeleteProgram(p.lanternShader);
-  glDeleteProgram(p.previewShader);
-  glDeleteProgram(p.skyShader);
-  glDeleteProgram(p.animShader);
-  glDeleteProgram(p.particleShader);
-  glDeleteProgram(p.treeShader);
+  for (GLuint prog : {p.groundShader, p.objShader, p.pathShader, p.lineShader,
+                      p.lanternShader, p.previewShader, p.skyShader, p.animShader,
+                      p.particleShader, p.treeShader}) {
+    invalidateUniformLocationCache(prog);
+    glDeleteProgram(prog);
+  }
 }
 
 // =============================================================================
@@ -409,6 +405,51 @@ DirectionalLight makeMoonLight() {
 }
 
 // =============================================================================
+// TELA DE CARREGAMENTO
+// =============================================================================
+// O setup inicial (shaders, ~30 modelos via Assimp, texturas, geração do mapa)
+// é síncrono e bloqueia a thread principal por alguns segundos. Como o loop de
+// jogo ainda não começou, a janela ficaria congelada. Esta função desenha UM
+// quadro de feedback (título + mensagem + barra) e troca os buffers; é chamada
+// entre as fases de carregamento. A barra "salta" a cada fase porque cada fase
+// bloqueia até terminar — comportamento normal de um carregador síncrono.
+static void renderLoadingFrame(GLFWwindow *window, const char *message, float progress) {
+  glfwPollEvents();
+
+  int w = 0, h = 0;
+  glfwGetFramebufferSize(window, &w, &h);
+  glViewport(0, 0, w, h);
+  glClearColor(0.06f, 0.05f, 0.08f, 1.0f);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+  ImGui_ImplOpenGL3_NewFrame();
+  ImGui_ImplGlfw_NewFrame();
+  ImGui::NewFrame();
+
+  ImDrawList *dl = ImGui::GetForegroundDrawList();
+  const float cx = w * 0.5f, cy = h * 0.5f;
+
+  const char *title = "1346AD: IRON & BLOOD";
+  ImVec2 tsz = ImGui::CalcTextSize(title);
+  dl->AddText(ImVec2(cx - tsz.x * 0.5f, cy - 64.0f), IM_COL32(235, 200, 90, 255), title);
+
+  ImVec2 msz = ImGui::CalcTextSize(message);
+  dl->AddText(ImVec2(cx - msz.x * 0.5f, cy - 22.0f), IM_COL32(220, 215, 205, 255), message);
+
+  const float barW = 360.0f, barH = 18.0f;
+  ImVec2 p0(cx - barW * 0.5f, cy + 12.0f);
+  ImVec2 p1(p0.x + barW, p0.y + barH);
+  float t = progress < 0.0f ? 0.0f : (progress > 1.0f ? 1.0f : progress);
+  dl->AddRectFilled(p0, p1, IM_COL32(38, 36, 44, 255), 4.0f);
+  dl->AddRectFilled(p0, ImVec2(p0.x + barW * t, p1.y), IM_COL32(150, 110, 35, 255), 4.0f);
+  dl->AddRect(p0, p1, IM_COL32(170, 130, 50, 255), 4.0f, 0, 1.5f);
+
+  ImGui::Render();
+  ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+  glfwSwapBuffers(window);
+}
+
+// =============================================================================
 // MAIN — toda a alocação GL acontece dentro de run() para garantir que os
 // destrutores rodem com o contexto GL ainda válido.
 // =============================================================================
@@ -431,6 +472,10 @@ int run(GLFWwindow *window) {
   // ---------------------------------------------------------------------------
   Hud gameHud;
   gameHud.init(window);
+
+  // ImGui pronto a partir daqui: já dá pra mostrar feedback de carregamento.
+  renderLoadingFrame(window, "Carregando...", 0.04f);
+
   HudTextures uiTextures;
   uiTextures.topBackground = loadTexture("data/textures/ui_topbg.png", 4);
   uiTextures.goldIcon      = loadTexture("data/textures/ui_gold.png", 4);
@@ -467,6 +512,7 @@ int run(GLFWwindow *window) {
   // ---------------------------------------------------------------------------
   // Shaders + uniforms
   // ---------------------------------------------------------------------------
+  renderLoadingFrame(window, "Compilando shaders...", 0.12f);
   ShaderPipeline pipe;
   if (!loadAllShaders(pipe)) {
     deleteAllShaders(pipe);
@@ -477,6 +523,7 @@ int run(GLFWwindow *window) {
   // ---------------------------------------------------------------------------
   // Modelos animados + estáticos
   // ---------------------------------------------------------------------------
+  renderLoadingFrame(window, "Carregando modelos...", 0.28f);
   AnimatedModel enemyBase("data/models/zombie/zombie_t.glb");
   enemyBase.loadAnimation("run",   "data/models/zombie/zombie_run.glb");
   enemyBase.loadAnimation("death", "data/models/zombie/zombie_death.glb");
@@ -551,6 +598,8 @@ int run(GLFWwindow *window) {
   knightBase.loadAnimation("knightDeath", "data/models/zombie/zombie_death.glb");
   knightBase.loadAnimation("command",     "data/models/knight/knight_command.glb");
 
+
+  renderLoadingFrame(window, "Carregando cenario...", 0.70f);
 
   std::vector<Vertex> bowVertices;
   if (!loadObj("data/models/archer/bow.obj", bowVertices)) {
@@ -687,12 +736,14 @@ Mesh shieldMesh(shieldVertices);
   // ---------------------------------------------------------------------------
   // Texturas da cena
   // ---------------------------------------------------------------------------
+  renderLoadingFrame(window, "Carregando texturas...", 0.84f);
   SceneTextures tex = loadAllSceneTextures();
 
   // Grama com balanço procedural
   // ---------------------------------------------------------------------------
   // Geometria primitiva + path + placement procedural
   // ---------------------------------------------------------------------------
+  renderLoadingFrame(window, "Gerando o mapa...", 0.92f);
   GpuMesh grassMesh = createGrassMesh();
   GpuMesh skyMesh = createSkyboxMesh();
 
@@ -858,6 +909,7 @@ Mesh shieldMesh(shieldVertices);
   static const char* kArquebusShots[] = {"data/audio/arquebus_shot1.mp3", "data/audio/arquebus_shot2.mp3"};
 
   // Pré-decodifica os SFX (mata a latência do 1º uso). Músicas ficam em streaming.
+  renderLoadingFrame(window, "Carregando audio...", 0.97f);
   audio::preloadOneShots({
       "data/audio/archer_shot1.mp3", "data/audio/archer_shot2.mp3",
       "data/audio/arquebus_shot1.mp3", "data/audio/arquebus_shot2.mp3",
@@ -871,6 +923,8 @@ Mesh shieldMesh(shieldVertices);
   audio::startIntermissionMusic(kIntermissionTracks[std::rand() % 3]);
 
   using namespace game_constants;
+  renderLoadingFrame(window, "Iniciando...", 1.0f);
+
   double lastTime = glfwGetTime();
   while (!glfwWindowShouldClose(window)) {
     double currentTime = glfwGetTime();
@@ -1051,6 +1105,12 @@ Mesh shieldMesh(shieldVertices);
     // ------- Clear + camera setup -------
     glClearColor(kFogColor.r, kFogColor.g, kFogColor.b, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    // O render do jogo assume cull face DESLIGADO por padrão (só renderLanterns
+    // o liga/desliga localmente). As telas de menu, porém, saem deixando
+    // GL_CULL_FACE ligado, o que descartava castelo e caminho de terra. Garantir
+    // o estado esperado no início de cada frame torna o render independente disso.
+    glDisable(GL_CULL_FACE);
 
     const float aspect = static_cast<float>(state.fbWidth) / static_cast<float>(state.fbHeight);
     cam.setPerspective(kFovDegrees * math_constants::kDegToRad, aspect, kNearPlane, kFarPlane);
@@ -1465,8 +1525,16 @@ int main() {
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
+  // Tela cheia no monitor primário, sempre na resolução nativa do monitor.
+  GLFWmonitor      *monitor = glfwGetPrimaryMonitor();
+  const GLFWvidmode *mode   = glfwGetVideoMode(monitor);
+  glfwWindowHint(GLFW_RED_BITS,     mode->redBits);
+  glfwWindowHint(GLFW_GREEN_BITS,   mode->greenBits);
+  glfwWindowHint(GLFW_BLUE_BITS,    mode->blueBits);
+  glfwWindowHint(GLFW_REFRESH_RATE, mode->refreshRate);
+
   GLFWwindow *window = glfwCreateWindow(
-      1280, 720, render_constants::kWindowTitle, nullptr, nullptr);
+      mode->width, mode->height, render_constants::kWindowTitle, monitor, nullptr);
   if (window == nullptr) {
     glfwTerminate();
     return 1;

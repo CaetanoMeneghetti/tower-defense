@@ -60,8 +60,16 @@ KnightTickResult updateKnight(KnightInstance &knight,
       enemies, enemyTicks,
       result.position[0], result.position[2],
       closestDistSq);
-  const float r = knight.collisionRadius;
-  bool colliding = (targetIdx >= 0) && (closestDistSq <= r * r);
+
+  // Colisão de combate por bounding-box (AABB) no plano XZ: o cavaleiro só
+  // ataca quando sua caixa encosta na do inimigo vivo mais próximo.
+  bool colliding = false;
+  if (targetIdx >= 0) {
+    colliding = collisions::aabbOverlap(
+        result.position[0], result.position[2], game_constants::kKnightMeleeHalfExtent,
+        enemyTicks[targetIdx].position[0], enemyTicks[targetIdx].position[2],
+        game_constants::kEnemyMeleeHalfExtent);
+  }
 
   if (colliding) {
     if (!knight.slashing) {
