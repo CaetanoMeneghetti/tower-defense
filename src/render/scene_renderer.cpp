@@ -346,28 +346,61 @@ void renderCannonBarrels(GLuint objShader,
 
 void renderCastle(GLuint objShader,
                   const ObjUniforms &u,
-                  Mesh &castleMesh,
-                  unsigned int castleTex,
-                  unsigned int castleNormal,
+                  const std::vector<CastleGroup> &groups,
                   const std::vector<Point> &curvePoints) {
-  if (curvePoints.empty()) return;
+  if (curvePoints.empty() || groups.empty()) return;
 
-  // Posiciona o castelo no fim da curva com offset manual e rotação angular.
   Point endPoint = curvePoints.back();
-  const float offsetX = 4.0f;
-  const float offsetZ = 4.0f;
-  const float rotationDeg = -55.0f;
-  const float uniformScale = 0.072f;
+  const float offsetX    = 16.0f;
+  const float offsetZ    = -4.0f;
+  const float rotationDeg = 200.0f;
+  const float uniformScale = 0.9f;
 
   Matrix<4, 4> t = translate<4, 4>(endPoint.x + offsetX, 0.0f, endPoint.y + offsetZ);
   Matrix<4, 4> r = rotateY<4, 4>(rotationDeg * math_constants::kDegToRad);
   Matrix<4, 4> s = scale<4, 4>(uniformScale, uniformScale, uniformScale);
-  Matrix<4, 4> model = t * r * s;
-  auto gl = toOpenGLMatrix(model);
-
+  auto gl = toOpenGLMatrix(t * r * s);
   glUniformMatrix4fv(u.model, 1, GL_FALSE, gl.data());
-  bindColorAndNormal(objShader, castleTex, castleNormal);
-  castleMesh.draw();
+
+  for (const auto &g : groups) {
+    if (!g.mesh) continue;
+    bindColorAndNormal(objShader, g.colorTex, g.normalTex);
+    g.mesh->draw();
+  }
+}
+
+// =============================================================================
+// FLECHAS
+// =============================================================================
+
+void renderArrows(GLuint objShader,
+                  const ObjUniforms &u,
+                  const std::vector<ArrowProjectile> &arrows,
+                  Mesh &arrowMesh,
+                  GLuint arrowTex) {
+  if (arrows.empty()) return;
+
+  glActiveTexture(GL_TEXTURE0);
+  glBindTexture(GL_TEXTURE_2D, arrowTex);
+  glUniform1i(cachedUniformLocation(objShader, "tex"), 0);
+
+  for (const auto &arrow : arrows) {
+    glm::vec3 forward  = glm::normalize(arrow.velocity);
+    glm::vec3 up_hint  = (std::abs(forward.y) < 0.99f)
+                         ? glm::vec3(0.0f, 1.0f, 0.0f)
+                         : glm::vec3(1.0f, 0.0f, 0.0f);
+    glm::vec3 right    = glm::normalize(glm::cross(up_hint, forward));
+    glm::vec3 up       = glm::cross(forward, right);
+
+    glm::mat4 m(1.0f);
+    m[0] = glm::vec4(forward * kArrowScale, 0.0f);  // mesh modelado no eixo X
+    m[1] = glm::vec4(up      * kArrowScale, 0.0f);
+    m[2] = glm::vec4(right   * kArrowScale, 0.0f);
+    m[3] = glm::vec4(arrow.position,        1.0f);
+
+    glUniformMatrix4fv(u.model, 1, GL_FALSE, glm::value_ptr(m));
+    arrowMesh.draw();
+  }
 }
 
 // =============================================================================

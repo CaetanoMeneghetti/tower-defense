@@ -47,6 +47,8 @@ int update(GLFWwindow *window,
       state.cameraMode  = CameraMode::Orbital;
       state.orbitTarget = defenders[hit].position;
       glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+    } else {
+      selected = -1;
     }
   }
   leftMouseWasDown = leftMouseIsDown;

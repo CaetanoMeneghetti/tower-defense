@@ -11,3 +11,6 @@ unsigned int loadTexture(const char *path, int forcedChannels = 0);
 
 // Textura 1x1 neutra para fallback de normal map (RGB = 128,128,255 → normal Z+).
 unsigned int createDefaultNormalTexture();
+
+// Textura 1x1 de cor sólida — usada para materiais sem map_Kd.
+unsigned int createSolidColorTexture(float r, float g, float b);

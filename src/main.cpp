@@ -41,7 +41,10 @@
 #include "math/vector.h"
 
 // ---- game ----
+#include "game/main_menu.h"
+#include "game/selection_screen.h"
 #include "game/app_state.h"
+#include "game/arrow_system.h"
 #include "game/defender_system.h"
 #include "game/enemy_system.h"
 #include "game/game_constants.h"
@@ -63,6 +66,8 @@
 #include "spell/spell_mode.h"
 
 // ---- render ----
+#include "render/explosion_system.h"
+#include "render/grass_instances.h"
 #include "render/particle_system.h"
 #include "render/render_constants.h"
 #include "render/scene_renderer.h"
@@ -72,6 +77,13 @@
 #include "world/path_generator.h"
 
 namespace {
+
+// Set to false to skip the pre-game screens and jump straight into gameplay.
+static constexpr bool kEnableMainMenu        = false;
+static constexpr bool kEnableSelectionScreen = false;
+
+// Grama instanciada com balanço procedural (pode ser desativada para ganhar FPS).
+static constexpr bool kEnableGrass           = true;
 
 // =============================================================================
 // SHADER PIPELINE
@@ -88,6 +100,8 @@ struct ShaderPipeline {
   GLuint animShader = 0;
   GLuint particleShader = 0;
   GLuint treeShader = 0;
+  GLuint grassSwayShader   = 0;
+  GLuint explosionShader   = 0;
 
   GroundUniforms groundU{};
   ObjUniforms objU{};
@@ -109,6 +123,8 @@ bool loadAllShaders(ShaderPipeline &p) {
   p.lanternShader  = createShaderProgram("data/shaders/lantern.vert", "data/shaders/lantern.frag");
   p.previewShader  = createShaderProgram("data/shaders/preview.vert", "data/shaders/preview.frag");
   p.animShader     = createShaderProgram("data/shaders/anim_shader.vert", "data/shaders/anim_shader.frag");
+  p.grassSwayShader  = createShaderProgram("data/shaders/grass_sway.vert",  "data/shaders/grass_sway.frag");
+  p.explosionShader  = createShaderProgram("data/shaders/explosion.vert",   "data/shaders/explosion.frag");
   p.particleShader = createShaderProgram("data/shaders/particle.vert",    "data/shaders/particle.frag");
   p.treeShader     = createShaderProgram("data/shaders/tree_instanced.vert", "data/shaders/shader.frag");
 
@@ -224,9 +240,6 @@ struct SceneTextures {
   unsigned int swordColor;
   unsigned int shieldColor;
 
-  unsigned int castleColor;
-  unsigned int castleNormal;
-
   unsigned int treeLog;
   unsigned int treeLeaves;
 
@@ -281,8 +294,6 @@ SceneTextures loadAllSceneTextures() {
   t.knightColor  = loadTexture("data/textures/knight.png");
   t.knightNormal = loadTexture("data/textures/knight_normal.png");
 
-  t.castleColor        = loadTexture("data/textures/castle.png");
-  t.castleNormal       = loadTexture("data/textures/castle_normal.png");
 
   t.treeLog            = loadTexture("data/textures/log.jpeg");
   t.treeLeaves         = loadTexture("data/textures/leaves.png", 4);
@@ -308,7 +319,6 @@ void deleteAllSceneTextures(const SceneTextures &t) {
       t.enemyColor, t.defaultNormal,
       t.archerColor, t.archerNormal, t.bowColor,
       t.arquebusColor, t.arquebusNormal, t.arquebusWeapon,
-      t.castleColor, t.castleNormal,
       t.treeLog, t.treeLeaves,
       t.swordColor, t.shieldColor,
       t.selectionCircle, t.armoredZombieColor,
@@ -407,7 +417,7 @@ int run(GLFWwindow *window) {
 
   AppState state;
   glfwSetWindowUserPointer(window, &state);
-  glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+  glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
 
   glfwGetFramebufferSize(window, &state.fbWidth, &state.fbHeight);
   glViewport(0, 0, state.fbWidth, state.fbHeight);
@@ -429,8 +439,30 @@ int run(GLFWwindow *window) {
   uiTextures.arquebusIcon  = loadTexture("data/textures/ui_arquebus.png", 4);
   uiTextures.cannonIcon     = loadTexture("data/textures/ui_cannoner.png", 4);
   uiTextures.knightIcon     = loadTexture("data/textures/ui_knight.png", 4);
-  uiTextures.zombiePortrait = loadTexture("data/textures/ui_zombie.png", 4);
+  uiTextures.zombiePortrait         = loadTexture("data/textures/ui_zombie.png", 4);
+  uiTextures.armoredZombiePortrait  = loadTexture("data/textures/ui_armoredzombie.png", 4);
+  uiTextures.chargerPortrait        = loadTexture("data/textures/ui_zombie.png", 4);
+  uiTextures.necromancerPortrait    = loadTexture("data/textures/ui_zombie.png", 4);
   gameHud.setTextures(uiTextures);
+
+  // ---------------------------------------------------------------------------
+  // Pre-game screens: MainMenu → SelectionScreen (run before asset loading)
+  // Back from SelectionScreen loops back to MainMenu.
+  // ---------------------------------------------------------------------------
+  if (kEnableMainMenu) {
+    while (true) {
+      MainMenu mainMenu;
+      if (!mainMenu.run(window)) return 0;  // Quit
+
+      if (!kEnableSelectionScreen) break;
+
+      SelectionScreen selScreen;
+      if (selScreen.run(window)) break;     // Begin — exit loop, load game
+      // Back was clicked: loop back to MainMenu
+    }
+  }
+
+  glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
   // ---------------------------------------------------------------------------
   // Shaders + uniforms
@@ -452,6 +484,19 @@ int run(GLFWwindow *window) {
   AnimatedModel armoredZombieBase("data/models/armoredzombie/armoredzombie.glb");
   armoredZombieBase.loadAnimation("run",   "data/models/armoredzombie/armoredzombie_walk.glb");
   armoredZombieBase.loadAnimation("death", "data/models/armoredzombie/armoredzombie_death.glb");
+
+  // Charger: walk → scream (50% HP) → run rápido; death reciclado do zumbi normal
+  AnimatedModel chargerBase("data/models/charger/charger_t.glb");
+  chargerBase.loadAnimation("walk",   "data/models/charger/charger_walk.glb");
+  chargerBase.loadAnimation("scream", "data/models/charger/charger_scream.glb");
+  chargerBase.loadAnimation("run",    "data/models/charger/charger_run.glb");
+  chargerBase.loadAnimation("death",  "data/models/zombie/zombie_death.glb");
+
+  // Necromancer: walk reciclado do zumbi normal + animação de invocação
+  AnimatedModel necromancerBase("data/models/necromancer/necromancer_t.glb");
+  necromancerBase.loadAnimation("walk",   "data/models/zombie/zombie_run.glb");
+  necromancerBase.loadAnimation("death",  "data/models/zombie/zombie_death.glb");
+  necromancerBase.loadAnimation("summon", "data/models/necromancer/necromancer_summon.glb");
 
   // Arcabuz — 5 tiers (sistema de upgrade)
   AnimatedModel arquebusBase("data/models/arquebus/arquebus_t.glb");
@@ -512,6 +557,16 @@ int run(GLFWwindow *window) {
     std::cout << "ERRO: Nao encontrou data/models/archer/bow.obj" << std::endl;
   }
   Mesh bowMesh(bowVertices);
+
+  std::vector<Vertex> arrowVertices;
+  if (!loadObj("data/models/projectiles/arrow/source/arrow.obj", arrowVertices)) {
+    std::cout << "ERRO: Nao encontrou arrow.obj" << std::endl;
+  }
+  Mesh      arrowMesh(arrowVertices);
+  GLuint    arrowTex = loadTexture(
+      "data/models/projectiles/arrow/textures/arrow_obj_initialShadingGroup_BaseColor.png");
+
+  std::vector<ArrowProjectile> arrows;
 
   std::vector<Vertex> swordVertices;
 if (!loadObj("data/models/knight/sword.obj", swordVertices)) {
@@ -575,9 +630,28 @@ Mesh shieldMesh(shieldVertices);
   }
   Mesh torchMesh(torchVertices);
 
-  std::vector<Vertex> castleVertices;
-  loadObj("data/models/world/castle.obj", castleVertices);
-  Mesh castleMesh(castleVertices);
+  std::vector<CastleGroup> castleGroups;
+  {
+    std::vector<ObjMaterialGroup> matGroups;
+    loadObjMaterials("data/models/world/castle.obj", matGroups);
+    auto mtl = parseMtlFromObj("data/models/world/castle.obj");
+    GLuint castleDefaultNormal = createDefaultNormalTexture();
+    for (auto &g : matGroups) {
+      if (g.vertices.empty()) continue;
+      CastleGroup cg;
+      cg.mesh = std::make_unique<Mesh>(g.vertices);
+      auto it = mtl.find(g.material);
+      if (it != mtl.end() && !it->second.map_Kd.empty()) {
+        cg.colorTex = loadTexture(it->second.map_Kd.c_str());
+      } else if (it != mtl.end()) {
+        cg.colorTex = createSolidColorTexture(it->second.Kd.x, it->second.Kd.y, it->second.Kd.z);
+      } else {
+        cg.colorTex = createSolidColorTexture(0.8f, 0.8f, 0.8f);
+      }
+      cg.normalTex = castleDefaultNormal;
+      castleGroups.push_back(std::move(cg));
+    }
+  }
 
   // Árvore: tenta carregar leaves+log separados; senão, fallback para tree.obj
   std::vector<Vertex> treeLeavesVertices, treeLogVertices;
@@ -615,6 +689,7 @@ Mesh shieldMesh(shieldVertices);
   // ---------------------------------------------------------------------------
   SceneTextures tex = loadAllSceneTextures();
 
+  // Grama com balanço procedural
   // ---------------------------------------------------------------------------
   // Geometria primitiva + path + placement procedural
   // ---------------------------------------------------------------------------
@@ -626,6 +701,18 @@ Mesh shieldMesh(shieldVertices);
   GpuMesh curveMesh = createCurveMesh(curvePoints);
   PathCache curveCache = buildPathCache(curvePoints);
   Mesh pathMesh = generatePathMesh(curvePoints, 2.0f);
+
+  std::unique_ptr<AnimatedModel> grassInstanceModel;
+  GrassField grassField;
+  if constexpr (kEnableGrass) {
+    grassInstanceModel = std::make_unique<AnimatedModel>("data/models/world/grass.glb");
+    grassField = buildGrassField(
+        pipe.grassSwayShader, tex.grass.color,
+        curvePoints,
+        /*pathClearance=*/4.5f,
+        /*areaHalfX=*/28.0f, /*areaHalfZ=*/18.0f,
+        /*spacing=*/0.4f, /*baseScale=*/0.55f);
+  }
 
   std::vector<TreeInstance> trees = placeTrees(curvePoints);
   // Buffer de matrizes por-instância das árvores (1 draw call por mesh em vez de
@@ -649,6 +736,14 @@ Mesh shieldMesh(shieldVertices);
   TroopDef armoredEnemyClass;
   armoredEnemyClass.type = 3;
   addTier(armoredEnemyClass, &armoredZombieBase, tex.armoredZombieColor, 0, nullptr, 0, glm::mat4(1.0f));
+
+  TroopDef chargerClass;
+  chargerClass.type = 3;
+  addTier(chargerClass, &chargerBase, tex.enemyColor, 0, nullptr, 0, glm::mat4(1.0f));
+
+  TroopDef necromancerClass;
+  necromancerClass.type = 3;
+  addTier(necromancerClass, &necromancerBase, tex.enemyColor, 0, nullptr, 0, glm::mat4(1.0f));
 
   TroopDef archerClass;
   archerClass.type = 1;
@@ -683,14 +778,21 @@ Mesh shieldMesh(shieldVertices);
 
   // Dois pools de GameObjects — um por tipo de inimigo.
   // Cada GO tem estado de animação independente; compartilham o AnimatedModel.
-  std::vector<GameObject> normalEnemyModels, armoredEnemyModels;
+  std::vector<GameObject> normalEnemyModels, armoredEnemyModels,
+                          chargerModels, necromancerModels;
   normalEnemyModels.reserve(kMaxEnemies);
   armoredEnemyModels.reserve(kMaxEnemies);
+  chargerModels.reserve(kMaxEnemies);
+  necromancerModels.reserve(kMaxEnemies);
   for (int i = 0; i < kMaxEnemies; ++i) {
     normalEnemyModels.emplace_back(&enemyClass, Vector<3>{0.f, 0.f, 0.f});
     normalEnemyModels.back().setIdleAnimations({"run"});
     armoredEnemyModels.emplace_back(&armoredEnemyClass, Vector<3>{0.f, 0.f, 0.f});
     armoredEnemyModels.back().setIdleAnimations({"run"});
+    chargerModels.emplace_back(&chargerClass, Vector<3>{0.f, 0.f, 0.f});
+    chargerModels.back().setIdleAnimations({"walk"});
+    necromancerModels.emplace_back(&necromancerClass, Vector<3>{0.f, 0.f, 0.f});
+    necromancerModels.back().setIdleAnimations({"walk"});
   }
 
   // Todos os slots começam mortos e controlados pela wave.
@@ -708,6 +810,10 @@ Mesh shieldMesh(shieldVertices);
   std::vector<DefenderShoot> defenderShoots;
   CannonSmoke cannonSmoke;
 
+  GLuint explosionTex = loadTexture("data/models/projectiles/arrow/explosion.png");
+  ExplosionSystem explosionSys;
+  initExplosionSystem(explosionSys, pipe.explosionShader, explosionTex);
+
   std::vector<KnightInstance> walkingKnights;
   std::vector<GameObject>     walkingKnightModels;
 
@@ -719,6 +825,10 @@ Mesh shieldMesh(shieldVertices);
 
   // Wave system — controla spawn
   WaveState waveState = makeWaveState();
+
+  // Highlights de invocação do necromancer (anel verde temporário)
+  struct SummonHighlight { glm::vec3 pos; float elapsed; };
+  std::vector<SummonHighlight> summonHighlights;
 
   DirectionalLight moonLight = makeMoonLight();
 
@@ -764,11 +874,16 @@ Mesh shieldMesh(shieldVertices);
   double lastTime = glfwGetTime();
   while (!glfwWindowShouldClose(window)) {
     double currentTime = glfwGetTime();
+#ifdef NDEBUG
     if (currentTime - lastTime < kFrameDelay) {
       continue;
     }
     const float deltaTime = static_cast<float>(kFrameDelay);
     lastTime += kFrameDelay;
+#else
+    const float deltaTime = static_cast<float>(currentTime - lastTime);
+    lastTime = currentTime;
+#endif
 
     selectionAngle += 0.5f * deltaTime;
     if (selectionAngle >= math_constants::kTwoPi) selectionAngle -= math_constants::kTwoPi;
@@ -779,9 +894,14 @@ Mesh shieldMesh(shieldVertices);
     for (int i = 0; i < kMaxEnemies; ++i) {
       auto &e = enemies[i];
       if (!e.alive && e.respawnTimer <= 0.0f) continue;
-      GameObject &model = (e.stats.type == enemy_types::kArmored)
-                          ? armoredEnemyModels[i] : normalEnemyModels[i];
-      enemyTicks[i] = updateEnemy(e, model, curvePoints, curveCache, state, deltaTime);
+      GameObject *model = nullptr;
+      switch (e.stats.type) {
+        case enemy_types::kArmored:     model = &armoredEnemyModels[i]; break;
+        case enemy_types::kCharger:     model = &chargerModels[i];      break;
+        case enemy_types::kNecromancer: model = &necromancerModels[i];  break;
+        default:                        model = &normalEnemyModels[i];  break;
+      }
+      enemyTicks[i] = updateEnemy(e, *model, curvePoints, curveCache, state, deltaTime);
       if (enemyTicks[i].diedThisFrame) ++deathsThisFrame;
     }
 
@@ -792,37 +912,61 @@ Mesh shieldMesh(shieldVertices);
 
     WavePhase prevPhase = waveState.phase;
     int spawnType = updateWave(waveState, window, deltaTime, deathsThisFrame, allSlotsFull);
+
+    // Helper: coloca um inimigo num slot livre e retorna true se achou slot.
+    auto spawnEnemy = [&](const EnemyStats &stats, float atDist = 0.0f) -> bool {
+      for (int i = 0; i < kMaxEnemies; ++i) {
+        if (enemies[i].alive || enemies[i].respawnTimer > 0.0f) continue;
+        enemies[i].stats           = stats;
+        enemies[i].hp              = stats.maxHp;
+        enemies[i].pathDistance    = atDist;
+        enemies[i].alive           = true;
+        enemies[i].hitFlashTime    = 0.0f;
+        enemies[i].respawnTimer    = 0.0f;
+        enemies[i].enraged         = false;
+        enemies[i].isSummoning     = false;
+        enemies[i].summonCooldown  = 6.0f;
+        clearSpellEffects(enemies[i]);
+        GameObject *m = nullptr;
+        switch (stats.type) {
+          case enemy_types::kArmored:     m = &armoredEnemyModels[i]; break;
+          case enemy_types::kCharger:     m = &chargerModels[i];      break;
+          case enemy_types::kNecromancer: m = &necromancerModels[i];  break;
+          default:                        m = &normalEnemyModels[i];  break;
+        }
+        const bool isNecro = (stats.type == enemy_types::kNecromancer);
+        m->setAnimation(isNecro ? "walk" : "run");
+        float spawnAngle = 0.0f; bool spawnReached = false;
+        enemyTicks[i].position = getPositionAtDistance(
+            curvePoints, curveCache, atDist, spawnAngle, spawnReached);
+        enemyTicks[i].angle         = spawnAngle;
+        enemyTicks[i].diedThisFrame = false;
+        return true;
+      }
+      return false;
+    };
+
     if (spawnType >= 0) {
       const WaveDef &waveDef = kWaves[waveState.currentWave];
-      const EnemyStats &stats = (spawnType == enemy_types::kArmored)
-                                ? waveDef.armoredStats : waveDef.enemyStats;
-      for (int i = 0; i < kMaxEnemies; ++i) {
-        if (!enemies[i].alive && enemies[i].respawnTimer <= 0.0f) {
-          enemies[i].stats        = stats;
-          enemies[i].hp           = stats.maxHp;
-          enemies[i].pathDistance = 0.0f;
-          enemies[i].alive        = true;
-          enemies[i].hitFlashTime = 0.0f;
-          enemies[i].respawnTimer = 0.0f;
-          clearSpellEffects(enemies[i]);
-          GameObject &model = (spawnType == enemy_types::kArmored)
-                              ? armoredEnemyModels[i] : normalEnemyModels[i];
-          model.setAnimation("run");
-          // O tick deste slot está na origem (resetado no início do frame, sem
-          // passar pelo updateEnemy por estar morto). Sem corrigir, os defensores
-          // veriam o recém-nascido em (0,0) e reagiriam fora do alcance. Calcula a
-          // posição real de spawn (início do path).
-          {
-            float spawnAngle = 0.0f;
-            bool  spawnReached = false;
-            enemyTicks[i].position = getPositionAtDistance(
-                curvePoints, curveCache, 0.0f, spawnAngle, spawnReached);
-            enemyTicks[i].angle = spawnAngle;
-            enemyTicks[i].diedThisFrame = false;
-          }
-          break;
-        }
+      const EnemyStats *stats = &waveDef.enemyStats;
+      switch (spawnType) {
+        case enemy_types::kArmored:     stats = &waveDef.armoredStats; break;
+        case enemy_types::kCharger:     stats = &waveDef.chargerStats; break;
+        case enemy_types::kNecromancer: stats = &waveDef.necroStats;   break;
+        default: break;
       }
+      spawnEnemy(*stats);
+    }
+
+    // Necromancer summon: spawna 2 zumbis normais na posição do invocador
+    for (int i = 0; i < kMaxEnemies; ++i) {
+      if (!enemyTicks[i].wantsToSummon) continue;
+      const float dist = enemies[i].pathDistance;
+      const EnemyStats summonedStats = { 40, 1.8f, 12, enemy_types::kNormal };
+      for (int s = 0; s < 2; ++s) spawnEnemy(summonedStats, dist);
+      summonHighlights.push_back({ glm::vec3(enemyTicks[i].position[0],
+                                             0.05f,
+                                             enemyTicks[i].position[2]), 0.0f });
     }
 
     // --- Transições de fase: troca de música e efeitos ---
@@ -849,10 +993,25 @@ Mesh shieldMesh(shieldVertices);
     // ------- UPDATE: defensores -------
     DefenderFireResult fireResult = updateDefenders(
         defenders, defenderShoots, enemies, enemyTicks, deltaTime);
-    for (int n = 0; n < fireResult.archerFired;   ++n) audio::playOneShot(kArcherShots[std::rand() % 2]);
+
+    // Spawna flechas e toca o som no momento exato do disparo
+    for (const auto &spawn : fireResult.arrowSpawns) {
+      ArrowProjectile a;
+      a.position  = spawn.origin;
+      a.velocity  = spawn.direction * kArrowSpeed;
+      a.damage    = spawn.damage;
+      a.maxDist   = spawn.maxDist;
+      a.targetIdx = spawn.targetIdx;
+      arrows.push_back(a);
+    }
+    for (int n = 0; n < fireResult.archerFired; ++n) audio::playOneShot(kArcherShots[std::rand() % 2]);
+    updateArrows(arrows, enemies, enemyTicks, deltaTime);
+
     for (int n = 0; n < fireResult.arquebusFired; ++n) audio::playOneShot(kArquebusShots[std::rand() % 2]);
     for (int n = 0; n < fireResult.cannonFired;   ++n) audio::playOneShot("data/audio/cannon1.mp3");
-    for (const auto &pos : fireResult.cannonShotPositions)  cannonSmoke.emit(pos, 10, 1.0f);
+    for (const auto &pos : fireResult.cannonShotPositions)   cannonSmoke.emit(pos, 10, 1.0f);
+    for (const auto &pos : fireResult.cannonImpactPositions) spawnExplosion(explosionSys, pos);
+    updateExplosions(explosionSys, deltaTime);
     for (const auto &pos : fireResult.arquebusShotPositions) cannonSmoke.emit(pos, 4, 0.35f);
     cannonSmoke.update(deltaTime);
 
@@ -970,10 +1129,19 @@ Mesh shieldMesh(shieldVertices);
     for (int i = 0; i < kMaxEnemies; ++i) {
       auto &e = enemies[i];
       if (!e.alive && e.respawnTimer <= 0.0f) continue;
-      bool isArmored = (e.stats.type == enemy_types::kArmored);
-      GameObject &model = isArmored ? armoredEnemyModels[i] : normalEnemyModels[i];
-      unsigned int eTex = isArmored ? tex.armoredZombieColor : tex.enemyColor;
-      renderEnemy(pipe.animShader, e, model, enemyTicks[i].position, enemyTicks[i].angle,
+      GameObject *model = nullptr;
+      unsigned int eTex = tex.enemyColor;
+      switch (e.stats.type) {
+        case enemy_types::kArmored:
+          model = &armoredEnemyModels[i]; eTex = tex.armoredZombieColor; break;
+        case enemy_types::kCharger:
+          model = &chargerModels[i]; break;
+        case enemy_types::kNecromancer:
+          model = &necromancerModels[i]; break;
+        default:
+          model = &normalEnemyModels[i]; break;
+      }
+      renderEnemy(pipe.animShader, e, *model, enemyTicks[i].position, enemyTicks[i].angle,
                   eTex, tex.defaultNormal);
     }
 
@@ -990,6 +1158,7 @@ Mesh shieldMesh(shieldVertices);
     uploadCommonUniforms(pipe.objShader, moonLight, allLights, glmViewPos, glView, glProj);
     renderDefenderWeapons(pipe.objShader, pipe.objU, defenders,
                           bowMesh, tex.bowColor, torchMesh, tex.torchColor);
+    renderArrows(pipe.objShader, pipe.objU, arrows, arrowMesh, arrowTex);
     renderCannonBarrels(pipe.objShader, pipe.objU, defenders, cannonBarrelMesh, tex.cannonBarrelColor);
     for (int i = 0; i < (int)walkingKnights.size(); ++i) {
       if (!walkingKnights[i].alive && !walkingKnights[i].dying) continue;
@@ -998,7 +1167,7 @@ Mesh shieldMesh(shieldVertices);
                           shieldMesh, tex.shieldColor,
                           weaponTweaks);
     }
-    renderCastle(pipe.objShader, pipe.objU, castleMesh, tex.castleColor, tex.castleNormal,
+    renderCastle(pipe.objShader, pipe.objU, castleGroups,
                  curvePoints);
 
     // ------- RENDER: chão de grama -------
@@ -1010,6 +1179,16 @@ Mesh shieldMesh(shieldVertices);
     renderTrees(pipe.treeShader, trees,
                 treeLogMesh.get(), tex.treeLog,
                 treeLeavesMesh.get(), tex.treeLeaves);
+
+    // ------- RENDER: grama com balanço -------
+    if constexpr (kEnableGrass) {
+      renderGrassField(grassField, *grassInstanceModel, static_cast<float>(currentTime),
+                       moonLight.direction, moonLight.ambient, moonLight.diffuse,
+                       kFogColor, kFogStart, kFogEnd,
+                       glmViewPos,
+                       glm::make_mat4(glView.data()),
+                       glm::make_mat4(glProj.data()));
+    }
 
     // ------- RENDER: círculo de range (azul) -------
     if (selectedTroopIndex >= 0 && selectedTroopIndex < static_cast<int>(defenders.size()) &&
@@ -1057,6 +1236,35 @@ Mesh shieldMesh(shieldVertices);
       glDisable(GL_BLEND);
     }
 
+    // ------- RENDER: highlight de invocação do necromancer -------
+    for (auto &h : summonHighlights) h.elapsed += deltaTime;
+    summonHighlights.erase(
+        std::remove_if(summonHighlights.begin(), summonHighlights.end(),
+                       [](const SummonHighlight &h){ return h.elapsed >= 1.8f; }),
+        summonHighlights.end());
+    if (!summonHighlights.empty()) {
+      glEnable(GL_BLEND);
+      glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+      glLineWidth(3.0f);
+      glUseProgram(pipe.lineShader);
+      glUniformMatrix4fv(pipe.lineU.view,       1, GL_FALSE, glView.data());
+      glUniformMatrix4fv(pipe.lineU.projection, 1, GL_FALSE, glProj.data());
+      glBindVertexArray(rangeCircleVAO);
+      for (const auto &h : summonHighlights) {
+        float t         = h.elapsed / 1.8f;
+        float alpha     = 1.0f - t;
+        float ringScale = 1.0f + t * 2.5f;
+        auto mModel = toOpenGLMatrix(
+            translate<4,4>(h.pos.x, h.pos.y, h.pos.z) * scale<4,4>(ringScale, 1.0f, ringScale));
+        glUniformMatrix4fv(pipe.lineU.model, 1, GL_FALSE, mModel.data());
+        glUniform4f(pipe.lineU.color, 0.1f, 1.0f, 0.3f, alpha);
+        glDrawArrays(GL_LINE_LOOP, 0, 64);
+      }
+      glBindVertexArray(0);
+      glLineWidth(1.0f);
+      glDisable(GL_BLEND);
+    }
+
     // ------- RENDER: lanternas -------
     if (lanternMesh) {
       uploadCommonUniforms(pipe.lanternShader, moonLight, allLights, glmViewPos, glView, glProj);
@@ -1098,11 +1306,14 @@ Mesh shieldMesh(shieldVertices);
     selectedTroopIndex = troop_selection::update(
         window, cam, renderCameraPos, defenders, state, selectedTroopIndex);
 
-    // ------- RENDER: fumaça dos canhões -------
+    // ------- RENDER: fumaça + explosões -------
     {
       const glm::vec3 camRight(glView[0], glView[4], glView[8]);
       const glm::vec3 camUp   (glView[1], glView[5], glView[9]);
       cannonSmoke.render(pipe.particleShader, tex.smokeTexture, camRight, camUp, glView, glProj);
+      renderExplosions(explosionSys, camRight, camUp,
+                       glm::make_mat4(glView.data()),
+                       glm::make_mat4(glProj.data()));
     }
 
     // ------- HUD + janela de upgrade (ImGui frame manual aqui pra empilhar) -------
@@ -1110,6 +1321,16 @@ Mesh shieldMesh(shieldVertices);
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
+
+#ifndef NDEBUG
+    ImGui::SetNextWindowPos({10, 10}, ImGuiCond_Always);
+    ImGui::SetNextWindowBgAlpha(0.4f);
+    ImGui::Begin("##fps", nullptr,
+                 ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs |
+                 ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove);
+    ImGui::Text("FPS: %d", currentFps);
+    ImGui::End();
+#endif
 
     gameHud.render(state, waveState, currentFps);
 
@@ -1244,26 +1465,18 @@ int main() {
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-  // Tela cheia "borderless": janela SEM borda, do tamanho exato do monitor e
-  // posicionada na origem dele. O shell do Windows trata isso como fullscreen e
-  // mantém a barra de tarefas embaixo — ela não aparece mais por cima do jogo.
-  // (Não usamos monitor != nullptr de propósito: fullscreen exclusivo minimiza
-  //  e pisca no Alt+Tab; borderless troca de janela instantaneamente.)
-  GLFWmonitor *monitor       = glfwGetPrimaryMonitor();
-  const GLFWvidmode *mode    = glfwGetVideoMode(monitor);
-  int monX = 0, monY = 0;
-  glfwGetMonitorPos(monitor, &monX, &monY);
-  glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
-
   GLFWwindow *window = glfwCreateWindow(
-      mode->width, mode->height, render_constants::kWindowTitle, nullptr, nullptr);
+      1280, 720, render_constants::kWindowTitle, nullptr, nullptr);
   if (window == nullptr) {
     glfwTerminate();
     return 1;
   }
-  glfwSetWindowPos(window, monX, monY);
-
   glfwMakeContextCurrent(window);
+#ifdef NDEBUG
+  glfwSwapInterval(1);  // vsync em release
+#else
+  glfwSwapInterval(0);  // sem vsync em debug para ver FPS real
+#endif
 
   if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
     glfwDestroyWindow(window);

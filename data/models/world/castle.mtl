@@ -1,12 +1,77 @@
-# Blender 5.1.1 MTL File: 'None'
+# Blender 5.1.2 MTL File: 'None'
 # www.blender.org
 
-newmtl wire_027177088
+newmtl Back
 Ns 0.000000
 Ka 1.000000 1.000000 1.000000
-Ks 0.000000 0.000000 0.000000
+Kd 0.000000 0.000000 0.000000
+Ks 0.500000 0.500000 0.500000
 Ke 0.000000 0.000000 0.000000
 Ni 1.500000
 d 1.000000
-illum 1
-map_Kd C:/Users/Fernando Tedesco/Downloads/castelo/textures/castle_export_castle_BaseColor.png
+illum 2
+
+newmtl BrickWall
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+illum 2
+map_Kd -s 2 2 2 StoneTilesGroundColors.png
+map_Ns -s 2 2 2 StoneTilesGroundRoughness.png
+map_d -s 2 2 2 StoneTilesGroundColors.png
+map_Bump -s 2 2 2 -bm 0.700000 StoneTilesGroundNormal.png
+
+newmtl Concrete
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+illum 2
+map_Kd ConcreteColor.png
+map_Ns ConcreteRoughness.png
+map_d ConcreteColor.png
+map_Bump -bm 1.000000 ConcreteNormal.png
+
+newmtl Glass
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+illum 2
+map_Kd GlassColor.png
+map_Ns GlassRoughness.png
+map_d GlassColor.png
+map_Bump -bm 1.000000 GlassNormal.png
+
+newmtl Roof
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+illum 2
+map_Kd RoofColor.png
+map_Ns RoofRoughness.png
+map_d RoofColor.png
+map_Bump -bm 1.000000 RoofNormal.png
+
+newmtl StoneBricks
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+illum 2
+map_Kd StoneBrickWallColor.png
+map_Ns StoneBrickWallRoughness.png
+map_d StoneBrickWallColor.png
+map_Bump -bm 1.000000 StoneBrickWallNormal.png
+
+newmtl Wood
+Ka 1.000000 1.000000 1.000000
+Kd 0.800000 0.800000 0.800000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd ../../textures/floor.png

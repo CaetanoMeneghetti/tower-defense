@@ -54,3 +54,16 @@ unsigned int createDefaultNormalTexture() {
   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 1, 1, 0, GL_RGB, GL_UNSIGNED_BYTE, flatNormal);
   return tex;
 }
+
+unsigned int createSolidColorTexture(float r, float g, float b) {
+  unsigned char px[3] = {
+    static_cast<unsigned char>(r * 255.0f),
+    static_cast<unsigned char>(g * 255.0f),
+    static_cast<unsigned char>(b * 255.0f),
+  };
+  unsigned int tex;
+  glGenTextures(1, &tex);
+  glBindTexture(GL_TEXTURE_2D, tex);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 1, 1, 0, GL_RGB, GL_UNSIGNED_BYTE, px);
+  return tex;
+}

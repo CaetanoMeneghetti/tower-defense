@@ -2,7 +2,15 @@
 
 #include "game/game_constants.h"
 
-const EnemyStats kZombieStats{50, 2.0f, 20};
+const EnemyStats kZombieStats     { 50, 2.0f, 20, enemy_types::kNormal      };
+const EnemyStats kChargerStats    { 80, 2.2f, 25, enemy_types::kCharger     };
+const EnemyStats kNecromancerStats{ 60, 1.6f, 15, enemy_types::kNecromancer };
+
+constexpr float kChargerRageSpeedMult  = 2.5f;
+constexpr float kChargerScreamDur      = 1.6f;  // duração aproximada da animação de scream
+constexpr float kNecromancerSummonDur  = 2.2f;   // duração da animação de invocação
+constexpr float kNecromancerCooldownMin = 7.0f;
+constexpr float kNecromancerCooldownMax = 12.0f;
 
 EnemyInstance makeEnemy(const EnemyStats &stats) {
   EnemyInstance enemy;
@@ -30,9 +38,10 @@ EnemyTickResult updateEnemy(EnemyInstance &enemy,
                             AppState &state,
                             float deltaTime) {
   EnemyTickResult result;
-  result.angle         = 0.0f;
-  result.reachedEnd    = false;
-  result.diedThisFrame = false;
+  result.angle          = 0.0f;
+  result.reachedEnd     = false;
+  result.diedThisFrame  = false;
+  result.wantsToSummon  = false;
 
   // --- Morte por HP (gate em alive evita re-trigger com hp<=0 persistente) ---
   if (enemy.alive && enemy.hp <= 0) {
@@ -58,10 +67,54 @@ EnemyTickResult updateEnemy(EnemyInstance &enemy,
     }
   }
 
+  // --- Charger: scream ao atingir 50% HP, depois corre rápido ---
+  if (enemy.alive && enemy.stats.type == enemy_types::kCharger) {
+    if (!enemy.enraged && enemy.summonAnimTimer > 0.0f) {
+      // Está no meio do scream — conta o tempo
+      enemy.summonAnimTimer -= deltaTime;
+      if (enemy.summonAnimTimer <= 0.0f) {
+        enemy.enraged = true;
+        enemy.stats.speed *= kChargerRageSpeedMult;
+        enemyModel.setAnimation("run");
+      }
+    } else if (!enemy.enraged && enemy.summonAnimTimer <= 0.0f) {
+      if (enemy.hp <= enemy.stats.maxHp / 2) {
+        enemy.summonAnimTimer = kChargerScreamDur;
+        enemyModel.setAnimation("scream", false);
+      }
+    }
+  }
+
+  // --- Necromancer: ciclo de invocação ---
+  if (enemy.alive && enemy.stats.type == enemy_types::kNecromancer) {
+    if (enemy.isSummoning) {
+      enemy.summonAnimTimer -= deltaTime;
+      if (enemy.summonAnimTimer <= 0.0f) {
+        enemy.isSummoning    = false;
+        enemy.summonCooldown = kNecromancerCooldownMin +
+            std::fmod(enemy.pathDistance * 13.7f, kNecromancerCooldownMax - kNecromancerCooldownMin);
+        result.wantsToSummon = true;
+        enemyModel.setAnimation("walk");
+      }
+    } else {
+      enemy.summonCooldown -= deltaTime;
+      if (enemy.summonCooldown <= 0.0f) {
+        enemy.isSummoning   = true;
+        enemy.summonAnimTimer = kNecromancerSummonDur;
+        enemyModel.setAnimation("summon", false);
+      }
+    }
+  }
+
   // --- Movimento ou animação de morte ---
   if (enemy.alive) {
-    // speedMultiplier carrega a lentidão permanente do feitiço quadrado (0.75).
-    enemy.pathDistance += enemy.stats.speed * enemy.speedMultiplier * deltaTime;
+    // Charger pausa durante o scream; necromancer pausa durante a invocação.
+    const bool chargerScreaming = (enemy.stats.type == enemy_types::kCharger
+                                   && !enemy.enraged && enemy.summonAnimTimer > 0.0f);
+    const bool necroSummoning   = (enemy.stats.type == enemy_types::kNecromancer
+                                   && enemy.isSummoning);
+    if (!chargerScreaming && !necroSummoning)
+      enemy.pathDistance += enemy.stats.speed * enemy.speedMultiplier * deltaTime;
     enemyModel.update(deltaTime);
   } else {
     enemyModel.update(deltaTime);
@@ -73,12 +126,18 @@ EnemyTickResult updateEnemy(EnemyInstance &enemy,
       if (enemy.respawnTimer < 0.0f) enemy.respawnTimer = 0.0f;
     }
     if (enemy.respawnTimer <= 0.0f && !enemy.waveControlled) {
-      enemy.hp           = enemy.stats.maxHp;
-      enemy.pathDistance = 0.0f;
-      enemy.alive        = true;
-      enemy.hitFlashTime = 0.0f;
+      enemy.hp             = enemy.stats.maxHp;
+      enemy.pathDistance   = 0.0f;
+      enemy.alive          = true;
+      enemy.hitFlashTime   = 0.0f;
+      enemy.enraged        = false;
+      enemy.isSummoning    = false;
+      enemy.summonCooldown = kNecromancerCooldownMin;
       clearSpellEffects(enemy);
-      enemyModel.setAnimation("run");
+      if (enemy.stats.type == enemy_types::kNecromancer)
+        enemyModel.setAnimation("walk");
+      else
+        enemyModel.setAnimation("run");
     }
   }
 

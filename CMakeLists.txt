@@ -24,8 +24,11 @@ set(SOURCES
   
 
   # game — regras de jogo (combate, placement, geração de cena)
+  src/game/arrow_system.cpp
   src/game/collisions.cpp
   src/game/combat.cpp
+  src/game/main_menu.cpp
+  src/game/selection_screen.cpp
   src/game/defender_system.cpp
   src/game/enemy_system.cpp
   src/game/path_navigation.cpp
@@ -44,6 +47,8 @@ set(SOURCES
   # render — desenho da cena
   src/render/particle_system.cpp
   src/render/scene_renderer.cpp
+  src/render/grass_instances.cpp
+  src/render/explosion_system.cpp
   src/render/shader_uniforms.cpp
 
   # world — geração procedural do caminho de terra

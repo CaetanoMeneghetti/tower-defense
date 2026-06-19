@@ -20,13 +20,17 @@ enum class WavePhase {
 
 // Definição completa de uma onda. Edite em wave_system.cpp.
 struct WaveDef {
-  const char* label;               // exibido na HUD ("Onda 1", "Onda Final"…)
-  int         enemyCount;          // total de inimigos nesta onda (normais + blindados)
-  float       spawnInterval;       // segundos entre cada spawn
-  EnemyStats  enemyStats;          // stats dos zumbis normais
-  float       intermissionSecs;    // duração do intervalo que precede esta onda
-  int         armoredCount  = 0;   // quantos dos enemyCount são zumbis blindados
-  EnemyStats  armoredStats  = {};  // stats dos blindados (ignorado se armoredCount==0)
+  const char* label;
+  int         enemyCount;
+  float       spawnInterval;
+  EnemyStats  enemyStats;
+  float       intermissionSecs;
+  int         armoredCount    = 0;
+  EnemyStats  armoredStats    = {};
+  int         chargerCount    = 0;
+  EnemyStats  chargerStats    = {};
+  int         necroCount      = 0;
+  EnemyStats  necroStats      = {};
 };
 
 // Estado em tempo de execução.

@@ -70,9 +70,27 @@ DefenderFireResult updateDefenders(std::vector<GameObject> &defenders,
         shoot.shootTimer += deltaTime;
         if (shoot.shootTimer >= interval) {
           shoot.shootTimer -= interval;
-          enemies[tidx].hp -= dmg;
-          enemies[tidx].hitFlashTime = game_constants::kEnemyHitFlashDuration;
-          if (enemies[tidx].hp <= 0) enemies[tidx].hp = 0;
+
+          // Origem da flecha: posição da mão/arco do arqueiro
+          float fwdX = -std::sin(unit.rotationY);
+          float fwdZ =  std::cos(unit.rotationY);
+          ArrowSpawn spawn;
+          spawn.origin = glm::vec3(
+              unit.position[0] + fwdX * 0.4f,
+              unit.position[1] + 1.2f,
+              unit.position[2] + fwdZ * 0.4f);
+
+          // Aponta pro centro do inimigo (altura do peito)
+          glm::vec3 toTarget(
+              enemyTicks[tidx].position[0] - spawn.origin.x,
+              enemyTicks[tidx].position[1] + 0.9f - spawn.origin.y,
+              enemyTicks[tidx].position[2] - spawn.origin.z);
+          spawn.direction = glm::normalize(toTarget);
+          spawn.damage    = dmg;
+          spawn.maxDist   = range * 1.5f;
+          spawn.targetIdx = tidx;
+
+          result.arrowSpawns.push_back(spawn);
           ++result.archerFired;
         }
       } else if (shoot.aiming) {
@@ -184,6 +202,10 @@ DefenderFireResult updateDefenders(std::vector<GameObject> &defenders,
                   unit.position[0] + fwdX * muzzleDist,
                   unit.position[1] + 0.35f,
                   unit.position[2] + fwdZ * muzzleDist));
+              result.cannonImpactPositions.push_back(glm::vec3(
+                  enemyTicks[tidx].position[0],
+                  enemyTicks[tidx].position[1] + 0.2f,
+                  enemyTicks[tidx].position[2]));
             }
           } else {
             shoot.reloading = false;

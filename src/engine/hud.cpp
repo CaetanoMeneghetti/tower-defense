@@ -576,43 +576,67 @@ void Hud::renderIntermissionOverlay(const WaveState &ws) {
     dl->AddLine(ImVec2(leftW, bannerY + 6.0f), ImVec2(leftW, bannerY + bannerH - 6.0f),
                 IM_COL32(100, 70, 20, 140), 1.0f);
 
-    // ---- Seção central: ícone + stats ----
-    const float iconSz = 40.0f;
-    const float iconX  = leftW + 10.0f;
-    const float iconY  = (bannerH - iconSz) * 0.5f;
+    // ---- Seção central: uma entrada por tipo de inimigo presente ----
+    struct EnemyEntry {
+      unsigned int tex;
+      const char  *label;
+      int          count;
+      int          hp;
+      float        speed;
+      int          damage;
+    };
 
-    // Fundo e borda do ícone
-    ImVec2 icSS = ImVec2(iconX, bannerY + iconY);
-    dl->AddRectFilled(icSS, ImVec2(icSS.x + iconSz, icSS.y + iconSz),
-                      IM_COL32(15, 10, 4, 220), 4.0f);
-    dl->AddRect(icSS, ImVec2(icSS.x + iconSz, icSS.y + iconSz),
-                IM_COL32(130, 88, 18, 200), 4.0f, 0, 1.0f);
+    int normalCount = def.enemyCount - def.armoredCount - def.chargerCount - def.necroCount;
 
-    ImGui::SetCursorPos(ImVec2(iconX, iconY));
-    ImGui::Image((void *)(intptr_t)textures_.zombiePortrait, ImVec2(iconSz, iconSz));
-    if (ImGui::IsItemHovered()) {
-      ImGui::BeginTooltip();
-      ImGui::TextColored(kColorGold, "Zumbi");
-      ImGui::Separator();
-      ImGui::Text("Quantidade : %d", def.enemyCount);
-      ImGui::Text("Vida       : %d", def.enemyStats.maxHp);
-      ImGui::Text("Velocidade : %.1f", def.enemyStats.speed);
-      ImGui::Text("Dano       : %d", def.enemyStats.damage);
-      ImGui::EndTooltip();
+    EnemyEntry entries[4];
+    int entryCount = 0;
+    if (normalCount   > 0) entries[entryCount++] = { textures_.zombiePortrait,        "Zumbi",       normalCount,       def.enemyStats.maxHp,  def.enemyStats.speed,  def.enemyStats.damage };
+    if (def.armoredCount > 0) entries[entryCount++] = { textures_.armoredZombiePortrait, "Blindado",    def.armoredCount,  def.armoredStats.maxHp, def.armoredStats.speed, def.armoredStats.damage };
+    if (def.chargerCount > 0) entries[entryCount++] = { textures_.chargerPortrait,       "Charger",     def.chargerCount,  def.chargerStats.maxHp, def.chargerStats.speed, def.chargerStats.damage };
+    if (def.necroCount   > 0) entries[entryCount++] = { textures_.necromancerPortrait,   "Necromante",  def.necroCount,    def.necroStats.maxHp,   def.necroStats.speed,   def.necroStats.damage };
+
+    const float iconSz   = 40.0f;
+    const float entryW   = iconSz + 90.0f;   // ícone + texto ao lado
+    const float iconY    = (bannerH - iconSz) * 0.5f;
+    float curX           = leftW + 12.0f;
+
+    for (int ei = 0; ei < entryCount; ++ei) {
+      const EnemyEntry &en = entries[ei];
+
+      // Separador entre entradas
+      if (ei > 0) {
+        dl->AddLine(ImVec2(curX - 6.0f, bannerY + 8.0f),
+                    ImVec2(curX - 6.0f, bannerY + bannerH - 8.0f),
+                    IM_COL32(80, 55, 15, 100), 1.0f);
+      }
+
+      // Fundo/borda do ícone
+      ImVec2 ic0 = ImVec2(curX, bannerY + iconY);
+      dl->AddRectFilled(ic0, ImVec2(ic0.x + iconSz, ic0.y + iconSz), IM_COL32(15, 10, 4, 220), 4.0f);
+      dl->AddRect      (ic0, ImVec2(ic0.x + iconSz, ic0.y + iconSz), IM_COL32(130, 88, 18, 200), 4.0f, 0, 1.0f);
+
+      ImGui::SetCursorPos(ImVec2(curX, iconY));
+      ImGui::Image((void *)(intptr_t)en.tex, ImVec2(iconSz, iconSz));
+      if (ImGui::IsItemHovered()) {
+        ImGui::BeginTooltip();
+        ImGui::TextColored(kColorGold, "%s", en.label);
+        ImGui::Separator();
+        ImGui::Text("Quantidade : %d", en.count);
+        ImGui::Text("Vida       : %d", en.hp);
+        ImGui::Text("Velocidade : %.1f", en.speed);
+        ImGui::Text("Dano       : %d", en.damage);
+        ImGui::EndTooltip();
+      }
+
+      // Texto ao lado do ícone
+      const float tx = curX + iconSz + 6.0f;
+      ImGui::SetCursorPos(ImVec2(tx, yTop));
+      ImGui::TextColored(kColorCream, "%s", en.label);
+      ImGui::SetCursorPos(ImVec2(tx, yBot));
+      ImGui::TextColored(kColorGold, "\xc3\x97 %d", en.count);
+
+      curX += entryW;
     }
-
-    const float statsX = iconX + iconSz + 10.0f;
-    ImGui::SetCursorPos(ImVec2(statsX, yTop));
-    ImGui::TextColored(kColorCream, "Zumbis");
-    ImGui::SameLine(0, 6);
-    ImGui::TextColored(kColorGold, "\xc3\x97 %d", def.enemyCount);
-
-    ImGui::SetCursorPos(ImVec2(statsX, yBot));
-    ImGui::TextColored(kColorMuted, "HP %d", def.enemyStats.maxHp);
-    ImGui::SameLine(0, 14);
-    ImGui::TextColored(kColorMuted, "Vel %.1f", def.enemyStats.speed);
-    ImGui::SameLine(0, 14);
-    ImGui::TextColored(kColorMuted, "Dano %d", def.enemyStats.damage);
 
     // ---- Seção direita: countdown ----
     const float rightW = 160.0f;

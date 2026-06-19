@@ -1,5 +1,6 @@
 #pragma once
 
+#include <glm/glm.hpp>
 #include <vector>
 
 #include "engine/game_object.h"
@@ -25,14 +26,24 @@ constexpr int kKnight   = 3;
 constexpr int kCannon   = 4;
 }  // namespace defender_types
 
+struct ArrowSpawn {
+  glm::vec3 origin;
+  glm::vec3 direction;   // normalizado
+  float     maxDist;
+  int       damage;
+  int       targetIdx;
+};
+
 struct DefenderFireResult {
-  int archerFired    = 0;
+  int archerFired    = 0;   // = arrowSpawns.size(), usado pra som
   int arquebusFired  = 0;
   int cannonFired    = 0;
   int knightSummoned = 0;
   int chargePlayed   = 0;
-  std::vector<glm::vec3> cannonShotPositions;
-  std::vector<glm::vec3> arquebusShotPositions;
+  std::vector<glm::vec3>  cannonShotPositions;    // boca do canhão (fumaça)
+  std::vector<glm::vec3>  cannonImpactPositions;  // ponto de impacto (explosão)
+  std::vector<glm::vec3>  arquebusShotPositions;
+  std::vector<ArrowSpawn> arrowSpawns;
 };
 
 // enemies     = todos os slots de inimigos (vivos e mortos)

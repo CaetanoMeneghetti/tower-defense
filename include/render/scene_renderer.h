@@ -3,7 +3,10 @@
 #include <glad/glad.h>
 #include <glm/glm.hpp>
 #include <array>
+#include <memory>
 #include <vector>
+
+#include "game/arrow_system.h"
 
 #include "engine/animated_model.h"
 #include "engine/camera.h"
@@ -113,12 +116,22 @@ void renderCannonBarrels(GLuint objShader,
                          Mesh &cannonBarrelMesh,
                          unsigned int cannonBarrelTex);
 
+struct CastleGroup {
+  std::unique_ptr<Mesh> mesh;
+  GLuint colorTex  = 0;
+  GLuint normalTex = 0;
+};
+
 void renderCastle(GLuint objShader,
                   const ObjUniforms &u,
-                  Mesh &castleMesh,
-                  unsigned int castleTex,
-                  unsigned int castleNormal,
+                  const std::vector<CastleGroup> &groups,
                   const std::vector<Point> &curvePoints);
+
+void renderArrows(GLuint objShader,
+                  const ObjUniforms &u,
+                  const std::vector<ArrowProjectile> &arrows,
+                  Mesh &arrowMesh,
+                  GLuint arrowTex);
 
 void renderGround(const GpuMesh &grassMesh,
                   const GrassTextures &textures,
