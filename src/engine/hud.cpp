@@ -43,37 +43,36 @@ void Hud::setTextures(const HudTextures &textures) {
 void Hud::setupStyle() {
   ImGuiStyle &s = ImGui::GetStyle();
 
-  s.Colors[ImGuiCol_WindowBg]        = ImVec4(0.08f, 0.05f, 0.03f, 0.92f);
-  s.Colors[ImGuiCol_Border]          = ImVec4(0.45f, 0.30f, 0.10f, 1.00f);
+  // Tema escuro neutro com acentos dourados (alinhado ao painel da célula 7).
+  s.Colors[ImGuiCol_WindowBg]        = ImVec4(0.09f, 0.09f, 0.11f, 0.96f);
+  s.Colors[ImGuiCol_ChildBg]         = ImVec4(0.12f, 0.12f, 0.14f, 1.00f);
+  s.Colors[ImGuiCol_Border]          = ImVec4(0.55f, 0.40f, 0.14f, 0.90f);
   s.Colors[ImGuiCol_Text]            = kColorCream;
   s.Colors[ImGuiCol_TextDisabled]    = kColorMuted;
-  s.Colors[ImGuiCol_TitleBg]         = ImVec4(0.10f, 0.06f, 0.02f, 1.00f);
-  s.Colors[ImGuiCol_TitleBgActive]   = ImVec4(0.18f, 0.10f, 0.03f, 1.00f);
-  s.Colors[ImGuiCol_Button]          = ImVec4(0.25f, 0.15f, 0.05f, 0.90f);
-  s.Colors[ImGuiCol_ButtonHovered]   = ImVec4(0.40f, 0.25f, 0.08f, 1.00f);
-  s.Colors[ImGuiCol_ButtonActive]    = ImVec4(0.55f, 0.35f, 0.10f, 1.00f);
-  s.Colors[ImGuiCol_Separator]       = ImVec4(0.40f, 0.28f, 0.10f, 0.80f);
-  s.Colors[ImGuiCol_FrameBg]         = ImVec4(0.12f, 0.08f, 0.03f, 0.80f);
-  s.Colors[ImGuiCol_PopupBg]         = ImVec4(0.10f, 0.07f, 0.03f, 0.97f);
+  s.Colors[ImGuiCol_TitleBg]         = ImVec4(0.12f, 0.09f, 0.04f, 1.00f);
+  s.Colors[ImGuiCol_TitleBgActive]   = ImVec4(0.20f, 0.14f, 0.05f, 1.00f);
+  s.Colors[ImGuiCol_Button]          = ImVec4(0.22f, 0.22f, 0.26f, 1.00f);
+  s.Colors[ImGuiCol_ButtonHovered]   = ImVec4(0.45f, 0.32f, 0.10f, 1.00f);
+  s.Colors[ImGuiCol_ButtonActive]    = ImVec4(0.58f, 0.42f, 0.13f, 1.00f);
+  s.Colors[ImGuiCol_Separator]       = ImVec4(0.45f, 0.33f, 0.12f, 0.70f);
+  s.Colors[ImGuiCol_FrameBg]         = ImVec4(0.16f, 0.16f, 0.19f, 1.00f);
+  s.Colors[ImGuiCol_FrameBgHovered]  = ImVec4(0.24f, 0.24f, 0.28f, 1.00f);
+  s.Colors[ImGuiCol_PopupBg]         = ImVec4(0.10f, 0.10f, 0.12f, 0.98f);
 
-  s.WindowRounding   = 4.0f;
-  s.FrameRounding    = 3.0f;
-  s.PopupRounding    = 4.0f;
+  s.WindowRounding   = 8.0f;
+  s.ChildRounding    = 6.0f;
+  s.FrameRounding    = 5.0f;
+  s.PopupRounding    = 6.0f;
   s.WindowBorderSize = 1.5f;
   s.FrameBorderSize  = 0.0f;
-  s.ItemSpacing      = ImVec2(8.0f, 5.0f);
-  s.WindowPadding    = ImVec2(10.0f, 8.0f);
+  s.ItemSpacing      = ImVec2(8.0f, 6.0f);
+  s.WindowPadding    = ImVec2(12.0f, 10.0f);
 }
 
 // ---------------------------------------------------------------------------
 // Barra superior
 // ---------------------------------------------------------------------------
 void Hud::renderTopBar(AppState &state, const WaveState &ws) {
-  using game_constants::kArcherCost;
-  using game_constants::kArquebusCost;
-  using game_constants::kCannonCost;
-  using game_constants::kKnightCost;
-
   const float barH = 80.0f;
   ImGuiWindowFlags flags =
       ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings |
@@ -109,56 +108,34 @@ void Hud::renderTopBar(AppState &state, const WaveState &ws) {
     ImGui::SetCursorPosY(46.0f);
     ImGui::TextColored(kColorGold, "%d GP", state.gold);
 
-    // ---- Slots de tropas ----
-    const float slotW = 72.0f;
-    float slotStartX = (state.fbWidth / 2.0f) - 2.0f * slotW;  // 4 slots centrados
+    // ---- Onda + inimigos (lado direito, estilo cabeçalho) ----
+    const float rPanelW = 210.0f;
+    const float rx = state.fbWidth - rPanelW - 12.0f;
+    dl->AddRectFilled(ImVec2(rx, sy), ImVec2(rx + rPanelW, barH - sy),
+                      IM_COL32(0, 0, 0, 155), 6.0f);
 
-    struct SlotDef { const char *id; unsigned int tex; int cost; int type; const char *nome; };
-    const SlotDef slots[4] = {
-      { "btn_archer",   textures_.archerIcon,   kArcherCost,   1, "Arqueiro"    },
-      { "btn_arquebus", textures_.arquebusIcon,  kArquebusCost, 2, "Arcabuzeiro" },
-      { "btn_cannon",   textures_.cannonIcon,    kCannonCost,   4, "Canhoneiro"  },
-      { "btn_knight",   textures_.knightIcon,    kKnightCost,   3, "Comandante"  },
-    };
-
-    for (int i = 0; i < 4; i++) {
-      float bx = slotStartX + i * slotW;
-      bool selected  = state.isPlacingTroop && state.selectedTroopType == slots[i].type;
-      bool canAfford = state.gold >= slots[i].cost;
-
-      dl->AddRectFilled(ImVec2(bx + 4, 8), ImVec2(bx + slotW - 4, barH - 8),
-                        IM_COL32(30, 20, 8, 180), 5.0f);
-      if (selected)
-        dl->AddRect(ImVec2(bx + 4, 8), ImVec2(bx + slotW - 4, barH - 8),
-                    IM_COL32(220, 170, 30, 255), 5.0f, 0, 2.0f);
-
-      ImGui::SetCursorPos(ImVec2(bx + (slotW - 44.0f) / 2.0f, (barH - 44.0f) / 2.0f - 4.0f));
-      if (!canAfford) ImGui::PushStyleVar(ImGuiStyleVar_Alpha, 0.40f);
-      if (ImGui::ImageButton(slots[i].id, (void *)(intptr_t)slots[i].tex, ImVec2(40, 40))) {
-        if (canAfford) {
-          state.isPlacingTroop    = true;
-          state.selectedTroopType = slots[i].type;
-          audio::playOneShot("data/audio/selection_sound.mp3");
-        }
-      }
-      if (!canAfford) ImGui::PopStyleVar();
-
-      if (ImGui::IsItemHovered()) {
-        ImGui::BeginTooltip();
-        ImGui::TextColored(kColorGold, "%s", slots[i].nome);
-        ImGui::Text("Custo: %d GP", slots[i].cost);
-        if (!canAfford) ImGui::TextColored(kColorRed, "Ouro insuficiente!");
-        ImGui::EndTooltip();
-      }
-
-      // Custo embaixo
-      char costStr[12];
-      std::snprintf(costStr, sizeof(costStr), "%d GP", slots[i].cost);
-      float tw = ImGui::CalcTextSize(costStr).x;
-      ImGui::SetCursorPos(ImVec2(bx + (slotW - tw) / 2.0f, barH - 18.0f));
-      ImGui::TextColored(canAfford ? kColorGold : kColorRed, "%s", costStr);
+    if (ws.phase == WavePhase::Victory) {
+      ImGui::SetCursorPos(ImVec2(rx + 14, 30.0f));
+      ImGui::TextColored(kColorGold, "VIT\xc3\x93RIA!");
+    } else {
+      const WaveDef &wd = kWaves[ws.currentWave];
+      char roundStr[24], enemyStr[28];
+      std::snprintf(roundStr, sizeof(roundStr), "ONDA %d / 10", ws.currentWave + 1);
+      std::snprintf(enemyStr, sizeof(enemyStr), "Mortos %d / %d", ws.killedCount, wd.enemyCount);
+      ImGui::SetCursorPos(ImVec2(rx + 14, 16.0f));
+      ImGui::TextColored(kColorGold, "%s", roundStr);
+      ImGui::SetCursorPos(ImVec2(rx + 14, 46.0f));
+      ImGui::TextColored(kColorCream, "%s", enemyStr);
     }
 
+    // ---- Dica central: abrir o menu de compra ----
+    const char *hint = "[M] Menu de Compra";
+    float hintW = ImGui::CalcTextSize(hint).x;
+    dl->AddRectFilled(ImVec2((state.fbWidth - hintW) * 0.5f - 12.0f, sy),
+                      ImVec2((state.fbWidth + hintW) * 0.5f + 12.0f, barH - sy),
+                      IM_COL32(0, 0, 0, 130), 6.0f);
+    ImGui::SetCursorPos(ImVec2((state.fbWidth - hintW) * 0.5f, 30.0f));
+    ImGui::TextColored(kColorGold, "%s", hint);
   }
   ImGui::End();
   ImGui::PopStyleColor();
@@ -166,126 +143,287 @@ void Hud::renderTopBar(AppState &state, const WaveState &ws) {
 }
 
 // ---------------------------------------------------------------------------
-// Barra de feitiços — compra (canto inferior esquerdo)
+// Desenha o ícone perfeito de uma forma de feitiço.
+// shape: 0=círculo, 1=quadrado, 2=triângulo.
 // ---------------------------------------------------------------------------
-// Espelha a barra de tropas, mas no canto inferior esquerdo e com ícones das
-// formas geométricas (quadrado azul, triângulo laranja, círculo verde) em vez
-// de retratos. Cada feitiço é consumível: clicar compra 1 carga (gasta ouro);
-// desenhar a forma no modo de feitiço (F) gasta a carga. O índice "cls" é a
-// classe da CNN: 0=círculo, 1=quadrado, 2=triângulo.
-void Hud::renderSpellBar(AppState &state) {
-  using game_constants::kSpellCircleCost;
-  using game_constants::kSpellSquareCost;
-  using game_constants::kSpellTriangleCost;
+static void drawSpellIcon(ImDrawList *dl, int shape, ImVec2 c, float r, ImU32 col) {
+  if (shape == 1) {
+    dl->AddRectFilled(ImVec2(c.x - r, c.y - r), ImVec2(c.x + r, c.y + r), col, 3.0f);
+  } else if (shape == 2) {
+    ImVec2 v0(c.x, c.y - r);
+    ImVec2 v1(c.x + 0.8660254f * r, c.y + 0.5f * r);
+    ImVec2 v2(c.x - 0.8660254f * r, c.y + 0.5f * r);
+    dl->AddTriangleFilled(v0, v1, v2, col);
+  } else {
+    dl->AddCircleFilled(c, r, col, 40);
+  }
+}
 
-  const float slotW = 66.0f, slotH = 66.0f, gap = 6.0f;
-  const float pad = 8.0f, titleH = 20.0f, costH = 18.0f;
-  const float winW = 3.0f * slotW + 2.0f * gap + 2.0f * pad;
-  const float winH = titleH + slotH + costH + 2.0f * pad;
+// ---------------------------------------------------------------------------
+// Menu de compra (tecla M) — estilo "loja" (ver Spec/imagem1, célula 7).
+// Abas Aliados/Feitiços à esquerda, cards das opções, painel de detalhe com
+// botão COMPRAR. Comprar aliado entra no modo de posicionamento e fecha o menu;
+// comprar feitiço adiciona 1 carga (consumível) e mantém o menu aberto.
+// ---------------------------------------------------------------------------
+void Hud::renderBuyMenu(AppState &state) {
+  if (!state.showBuyMenu) return;
+  using namespace game_constants;
 
-  ImGuiWindowFlags flags =
-      ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings |
-      ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollWithMouse |
-      ImGuiWindowFlags_NoBringToFrontOnFocus;
+  struct AllyOpt  { const char *name; unsigned int icon; int cost; int type; const char *desc; };
+  struct SpellOpt { const char *name; int cls; int cost; const char *desc; };
+  const AllyOpt allies[4] = {
+      {"Arqueiro",    textures_.archerIcon,   kArcherCost,   1, "Unidade b\xc3\xa1sica. Dano \xc3\xbanico \xc3\xa0 dist\xc3\xa2ncia."},
+      {"Arcabuzeiro", textures_.arquebusIcon, kArquebusCost, 2, "Tiro pesado. Dano alto, recarga lenta."},
+      {"Canhoneiro",  textures_.cannonIcon,   kCannonCost,   4, "Dano em \xc3\xa1rea. Devastador contra grupos."},
+      {"Comandante",  textures_.knightIcon,   kKnightCost,   3, "Invoca cavaleiros que avan\xc3\xa7""am pelo caminho."},
+  };
+  const SpellOpt spells[3] = {
+      {"Lentid\xc3\xa3o", 1, kSpellSquareCost,   "Inimigos na \xc3\xa1rea andam a 75% da velocidade."},
+      {"Dano",           2, kSpellTriangleCost, "Inimigos na \xc3\xa1rea perdem metade da vida."},
+      {"Veneno",         0, kSpellCircleCost,   "Inimigos na \xc3\xa1rea: veneno 10%/s por 8s."},
+  };
 
-  ImGui::SetNextWindowPos(ImVec2(10.0f, state.fbHeight - winH - 10.0f), ImGuiCond_Always);
-  ImGui::SetNextWindowSize(ImVec2(winW, winH), ImGuiCond_Always);
+  const bool isAlly = (state.buyMenuTab == 0);
+  const int  nCards = isAlly ? 4 : 3;
+  if (state.buyMenuSelection >= nCards) state.buyMenuSelection = 0;
+
+  ImGuiIO &io = ImGui::GetIO();
+  const float W = io.DisplaySize.x, Hh = io.DisplaySize.y;
+
+  ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always);
+  ImGui::SetNextWindowSize(ImVec2(W, Hh), ImGuiCond_Always);
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.06f, 0.04f, 0.02f, 0.90f));
+  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0, 0, 0, 0));
+  ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings |
+                           ImGuiWindowFlags_NoMove;
 
-  // shape: 0=círculo, 1=quadrado, 2=triângulo. Desenha o ícone perfeito.
-  auto drawIcon = [](ImDrawList *dl, int shape, ImVec2 c, float r, ImU32 col) {
-    if (shape == 1) {
-      dl->AddRectFilled(ImVec2(c.x - r, c.y - r), ImVec2(c.x + r, c.y + r), col, 2.0f);
-    } else if (shape == 2) {
-      ImVec2 v0(c.x, c.y - r);
-      ImVec2 v1(c.x + 0.8660254f * r, c.y + 0.5f * r);
-      ImVec2 v2(c.x - 0.8660254f * r, c.y + 0.5f * r);
-      dl->AddTriangleFilled(v0, v1, v2, col);
-    } else {
-      dl->AddCircleFilled(c, r, col, 32);
-    }
-  };
-
-  struct SpellSlot { int cls; int cost; const char *nome; };
-  const SpellSlot slots[3] = {
-      { 1, kSpellSquareCost,   "Lentid\xc3\xa3o" },  // quadrado azul
-      { 2, kSpellTriangleCost, "Dano"           },   // triângulo laranja
-      { 0, kSpellCircleCost,   "Veneno"         },   // círculo verde
-  };
-
-  if (ImGui::Begin("SpellBar", nullptr, flags)) {
+  if (ImGui::Begin("##BuyMenu", nullptr, flags)) {
     ImDrawList *dl = ImGui::GetWindowDrawList();
-    const ImVec2 win = ImGui::GetWindowPos();
 
-    // Título
-    ImGui::SetCursorPos(ImVec2(pad, 4.0f));
-    ImGui::TextColored(kColorGold, "FEITI\xc3\x87OS");
+    // Fundo escurecido (foca o painel e bloqueia cliques no mundo)
+    dl->AddRectFilled(ImVec2(0, 0), ImVec2(W, Hh), IM_COL32(0, 0, 0, 150));
 
-    const float rowY = pad + titleH;
-    for (int i = 0; i < 3; ++i) {
-      const float bx = pad + i * (slotW + gap);
-      const float by = rowY;
-      const int   cls = slots[i].cls;
-      const bool  canAfford = state.gold >= slots[i].cost;
-      const int   charges   = state.spellCharges[cls];
+    // Painel central
+    const float panelW = 760.0f, panelH = 430.0f;
+    const float px = (W - panelW) * 0.5f, py = (Hh - panelH) * 0.5f;
+    dl->AddRectFilled(ImVec2(px, py), ImVec2(px + panelW, py + panelH), IM_COL32(22, 22, 27, 252), 10.0f);
+    dl->AddRect(ImVec2(px, py), ImVec2(px + panelW, py + panelH), IM_COL32(150, 110, 35, 255), 10.0f, 0, 2.0f);
 
-      // Coordenadas absolutas (drawlist) do slot
-      ImVec2 a(win.x + bx, win.y + by);
-      ImVec2 b(win.x + bx + slotW, win.y + by + slotH);
-      dl->AddRectFilled(a, b, IM_COL32(30, 20, 8, 200), 5.0f);
-      dl->AddRect(a, b, IM_COL32(120, 85, 25, 200), 5.0f, 0, 1.5f);
+    // ---- Header ----
+    const float headH = 50.0f;
+    ImGui::SetCursorPos(ImVec2(px + 20, py + 14));
+    ImGui::SetWindowFontScale(1.15f);
+    ImGui::TextColored(kColorGold, "MENU DE COMPRA");
+    ImGui::SetWindowFontScale(1.0f);
 
-      // Ícone da forma na cor do feitiço
-      const float *rgb = spell::kSpellColors[cls];
-      int alpha = canAfford ? 255 : 110;
-      ImU32 col = IM_COL32(int(rgb[0] * 255), int(rgb[1] * 255), int(rgb[2] * 255), alpha);
-      ImVec2 center(a.x + slotW * 0.5f, a.y + slotH * 0.5f);
-      drawIcon(dl, cls, center, slotW * 0.30f, col);
+    char goldStr[16];
+    std::snprintf(goldStr, sizeof(goldStr), "%d", state.gold);
+    float gW = ImGui::CalcTextSize(goldStr).x;
+    ImGui::SetCursorPos(ImVec2(px + panelW - 42.0f - gW, py + 16));
+    ImGui::Image((void *)(intptr_t)textures_.goldIcon, ImVec2(20, 20));
+    ImGui::SameLine(0, 6);
+    ImGui::SetCursorPosY(py + 16);
+    ImGui::TextColored(kColorGold, "%s", goldStr);
 
-      // Badge de cargas (canto superior direito do slot)
-      if (charges > 0) {
-        char cnt[8];
-        std::snprintf(cnt, sizeof(cnt), "x%d", charges);
-        ImVec2 ts = ImGui::CalcTextSize(cnt);
-        ImVec2 tp(b.x - ts.x - 5.0f, a.y + 3.0f);
-        dl->AddRectFilled(ImVec2(tp.x - 3, tp.y - 1), ImVec2(tp.x + ts.x + 3, tp.y + ts.y + 1),
-                          IM_COL32(0, 0, 0, 180), 3.0f);
-        dl->AddText(tp, IM_COL32(255, 230, 140, 255), cnt);
+    dl->AddLine(ImVec2(px + 16, py + headH), ImVec2(px + panelW - 16, py + headH),
+                IM_COL32(120, 90, 30, 160), 1.5f);
+
+    // ---- Abas (coluna esquerda) ----
+    const float tabX = px + 16, tabY = py + headH + 16, tabW = 130, tabH = 44, tabGap = 8;
+    const char *tabNames[2] = {"ALIADOS", "FEITI\xc3\x87OS"};
+    for (int t = 0; t < 2; ++t) {
+      float ty = tabY + t * (tabH + tabGap);
+      bool active = (state.buyMenuTab == t);
+      dl->AddRectFilled(ImVec2(tabX, ty), ImVec2(tabX + tabW, ty + tabH),
+                        active ? IM_COL32(72, 54, 16, 255) : IM_COL32(34, 34, 40, 255), 6.0f);
+      dl->AddRect(ImVec2(tabX, ty), ImVec2(tabX + tabW, ty + tabH),
+                  active ? IM_COL32(212, 162, 42, 255) : IM_COL32(70, 70, 80, 200),
+                  6.0f, 0, active ? 2.0f : 1.0f);
+      ImGui::SetCursorPos(ImVec2(tabX + 16, ty + (tabH - ImGui::GetTextLineHeight()) * 0.5f));
+      ImGui::TextColored(active ? kColorGold : kColorCream, "%s", tabNames[t]);
+      ImGui::SetCursorPos(ImVec2(tabX, ty));
+      char tid[16];
+      std::snprintf(tid, sizeof(tid), "##tab%d", t);
+      if (ImGui::InvisibleButton(tid, ImVec2(tabW, tabH)) && state.buyMenuTab != t) {
+        state.buyMenuTab = t;
+        state.buyMenuSelection = 0;
       }
+    }
 
-      // Botão invisível por cima do slot para a compra
-      ImGui::SetCursorPos(ImVec2(bx, by));
-      if (ImGui::InvisibleButton(slots[i].nome, ImVec2(slotW, slotH))) {
-        if (canAfford) {
-          state.gold -= slots[i].cost;
-          state.spellCharges[cls]++;
-          audio::playOneShot("data/audio/selection_sound.mp3");
+    // ---- Cards das opções ----
+    const float cardsX = tabX + tabW + 22;
+    const float cardsY = py + headH + 16;
+    const float cardW = 112, cardH = 175, cardGap = 14;
+
+    for (int i = 0; i < nCards; ++i) {
+      float cx = cardsX + i * (cardW + cardGap);
+      float cy = cardsY;
+      bool selected = (state.buyMenuSelection == i);
+      int cost = isAlly ? allies[i].cost : spells[i].cost;
+      bool canAfford = state.gold >= cost;
+
+      dl->AddRectFilled(ImVec2(cx, cy), ImVec2(cx + cardW, cy + cardH),
+                        IM_COL32(30, 30, 36, 255), 7.0f);
+      dl->AddRect(ImVec2(cx, cy), ImVec2(cx + cardW, cy + cardH),
+                  selected ? IM_COL32(212, 162, 42, 255) : IM_COL32(70, 70, 80, 220),
+                  7.0f, 0, selected ? 2.5f : 1.0f);
+
+      // Nome (topo, centrado)
+      const char *cname = isAlly ? allies[i].name : spells[i].name;
+      float nW = ImGui::CalcTextSize(cname).x;
+      ImGui::SetCursorPos(ImVec2(cx + (cardW - nW) * 0.5f, cy + 8));
+      ImGui::TextColored(kColorCream, "%s", cname);
+
+      // Moldura do retrato
+      ImVec2 pBox0(cx + 10, cy + 32), pBox1(cx + cardW - 10, cy + cardH - 34);
+      dl->AddRectFilled(pBox0, pBox1, IM_COL32(15, 15, 18, 255), 4.0f);
+      dl->AddRect(pBox0, pBox1, IM_COL32(90, 70, 25, 200), 4.0f, 0, 1.0f);
+
+      if (isAlly) {
+        const float imgSz = 84.0f;
+        ImGui::SetCursorPos(ImVec2((pBox0.x + pBox1.x) * 0.5f - imgSz * 0.5f,
+                                   (pBox0.y + pBox1.y) * 0.5f - imgSz * 0.5f));
+        ImGui::Image((void *)(intptr_t)allies[i].icon, ImVec2(imgSz, imgSz));
+      } else {
+        int cls = spells[i].cls;
+        const float *rgb = spell::kSpellColors[cls];
+        ImU32 col = IM_COL32(int(rgb[0] * 255), int(rgb[1] * 255), int(rgb[2] * 255),
+                             canAfford ? 255 : 120);
+        drawSpellIcon(dl, cls, ImVec2((pBox0.x + pBox1.x) * 0.5f, (pBox0.y + pBox1.y) * 0.5f),
+                      32.0f, col);
+        // Badge de cargas
+        int charges = state.spellCharges[cls];
+        if (charges > 0) {
+          char cnt[8];
+          std::snprintf(cnt, sizeof(cnt), "x%d", charges);
+          ImVec2 ts = ImGui::CalcTextSize(cnt);
+          ImVec2 tp(pBox1.x - ts.x - 6.0f, pBox0.y + 5.0f);
+          dl->AddRectFilled(ImVec2(tp.x - 3, tp.y - 1), ImVec2(tp.x + ts.x + 3, tp.y + ts.y + 1),
+                            IM_COL32(0, 0, 0, 190), 3.0f);
+          dl->AddText(tp, IM_COL32(255, 230, 140, 255), cnt);
         }
       }
-      if (ImGui::IsItemHovered()) {
-        ImGui::BeginTooltip();
-        ImGui::TextColored(kColorGold, "%s", slots[i].nome);
-        const char *desc = (cls == 1) ? "Inimigos na area: 75% da velocidade (permanente)"
-                         : (cls == 2) ? "Inimigos na area perdem metade da vida"
-                                      : "Inimigos na area: veneno 10%/s por 8s";
-        ImGui::Text("%s", desc);
-        ImGui::Text("Custo: %d GP  |  Cargas: %d", slots[i].cost, charges);
-        if (!canAfford) ImGui::TextColored(kColorRed, "Ouro insuficiente!");
-        ImGui::EndTooltip();
-      }
 
-      // Custo embaixo do slot
+      // Custo (rodapé do card, com moeda)
       char costStr[12];
-      std::snprintf(costStr, sizeof(costStr), "%d GP", slots[i].cost);
-      float tw = ImGui::CalcTextSize(costStr).x;
-      ImGui::SetCursorPos(ImVec2(bx + (slotW - tw) * 0.5f, by + slotH + 1.0f));
+      std::snprintf(costStr, sizeof(costStr), "%d", cost);
+      float coinW = 16.0f, cW = ImGui::CalcTextSize(costStr).x;
+      float totalW = coinW + 4.0f + cW;
+      float startX = cx + (cardW - totalW) * 0.5f;
+      ImGui::SetCursorPos(ImVec2(startX, cy + cardH - 26));
+      ImGui::Image((void *)(intptr_t)textures_.goldIcon, ImVec2(coinW, coinW));
+      ImGui::SameLine(0, 4);
+      ImGui::SetCursorPosY(cy + cardH - 25);
       ImGui::TextColored(canAfford ? kColorGold : kColorRed, "%s", costStr);
+
+      // Clique seleciona o card
+      ImGui::SetCursorPos(ImVec2(cx, cy));
+      char cid[16];
+      std::snprintf(cid, sizeof(cid), "##card%d", i);
+      if (ImGui::InvisibleButton(cid, ImVec2(cardW, cardH))) {
+        state.buyMenuSelection = i;
+      }
     }
+
+    // ---- Painel de detalhe (rodapé) ----
+    const float detY = cardsY + cardH + 16;
+    const float detX = cardsX;
+    const float detW = px + panelW - 16 - detX;
+    dl->AddLine(ImVec2(detX, detY - 6), ImVec2(detX + detW, detY - 6),
+                IM_COL32(120, 90, 30, 120), 1.0f);
+
+    int sel = state.buyMenuSelection;
+    const char *selName = isAlly ? allies[sel].name : spells[sel].name;
+    const char *selDesc = isAlly ? allies[sel].desc : spells[sel].desc;
+    int selCost = isAlly ? allies[sel].cost : spells[sel].cost;
+    bool canBuy = state.gold >= selCost;
+
+    ImGui::SetCursorPos(ImVec2(detX, detY));
+    ImGui::SetWindowFontScale(1.1f);
+    ImGui::TextColored(kColorGold, "%s", selName);
+    ImGui::SetWindowFontScale(1.0f);
+
+    ImGui::SetCursorPos(ImVec2(detX, detY + 26));
+    ImGui::PushTextWrapPos(detX + detW - 170.0f);
+    ImGui::TextColored(kColorMuted, "%s", selDesc);
+    ImGui::PopTextWrapPos();
+
+    // Botão COMPRAR (verde) à direita
+    const float btnW = 150.0f, btnH = 46.0f;
+    ImGui::SetCursorPos(ImVec2(detX + detW - btnW, detY + 8));
+    ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.20f, 0.45f, 0.16f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.27f, 0.58f, 0.22f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.33f, 0.66f, 0.27f, 1.0f));
+    if (!canBuy) ImGui::BeginDisabled();
+    if (ImGui::Button("COMPRAR", ImVec2(btnW, btnH))) {
+      if (isAlly) {
+        state.isPlacingTroop    = true;
+        state.selectedTroopType = allies[sel].type;
+        state.showBuyMenu       = false;  // fecha pra liberar o campo de batalha
+        audio::playOneShot("data/audio/selection_sound.mp3");
+      } else {
+        state.gold -= selCost;
+        state.spellCharges[spells[sel].cls]++;
+        audio::playOneShot("data/audio/selection_sound.mp3");
+      }
+    }
+    if (!canBuy) ImGui::EndDisabled();
+    ImGui::PopStyleColor(3);
+
+    // Dica de fechar
+    ImGui::SetCursorPos(ImVec2(px + 20, py + panelH - 24));
+    ImGui::TextColored(kColorMuted, "[M] fecha o menu");
   }
   ImGui::End();
   ImGui::PopStyleColor();
   ImGui::PopStyleVar();
+}
+
+// ---------------------------------------------------------------------------
+// Legenda de atalhos — sempre visível (canto inferior esquerdo).
+// ---------------------------------------------------------------------------
+void Hud::renderControlsLegend(const AppState &state) {
+  struct KeyHint { const char *key; const char *desc; };
+  const KeyHint hints[] = {
+      {"M",    "Menu de compra"},
+      {"C",    "Trocar c\xc3\xa2mera"},
+      {"F",    "Desenhar feiti\xc3\xa7o"},
+      {"T",    "Curva (debug)"},
+      {"Y",    "Pular intermiss\xc3\xa3o"},
+      {"WASD", "Mover c\xc3\xa2mera"},
+  };
+  const int n = (int)(sizeof(hints) / sizeof(hints[0]));
+
+  const float lineH = ImGui::GetTextLineHeightWithSpacing();
+  const float pad = 10.0f;
+  const float winW = 200.0f;
+  const float winH = pad * 2.0f + lineH * (n + 1);
+
+  ImGuiWindowFlags flags =
+      ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings |
+      ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs |
+      ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav |
+      ImGuiWindowFlags_NoBringToFrontOnFocus;
+
+  ImGui::SetNextWindowPos(ImVec2(10.0f, state.fbHeight - winH - 10.0f), ImGuiCond_Always);
+  ImGui::SetNextWindowSize(ImVec2(winW, winH), ImGuiCond_Always);
+  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.05f, 0.05f, 0.06f, 0.82f));
+  ImGui::PushStyleColor(ImGuiCol_Border,   ImVec4(0.45f, 0.34f, 0.12f, 0.9f));
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(pad, pad));
+
+  if (ImGui::Begin("##Controls", nullptr, flags)) {
+    ImGui::TextColored(kColorGold, "ATALHOS");
+    for (int i = 0; i < n; ++i) {
+      // F (desenho de feitiço) só funciona na câmera aérea: esmaecido fora dela.
+      const bool inactive = (hints[i].key[0] == 'F' && state.cameraMode != CameraMode::Aerial);
+      ImGui::TextColored(inactive ? kColorMuted : kColorGold, "[%s]", hints[i].key);
+      ImGui::SameLine(58.0f);
+      ImGui::TextColored(inactive ? kColorMuted : kColorCream, "%s", hints[i].desc);
+    }
+  }
+  ImGui::End();
+  ImGui::PopStyleVar();
+  ImGui::PopStyleColor(2);
 }
 
 // ---------------------------------------------------------------------------
@@ -303,52 +441,56 @@ void Hud::renderWaveBar(const AppState &state, const WaveState &ws) {
   ImGui::SetNextWindowPos(ImVec2(0, topBarH), ImGuiCond_Always);
   ImGui::SetNextWindowSize(ImVec2((float)state.fbWidth, barH), ImGuiCond_Always);
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.05f, 0.03f, 0.01f, 0.88f));
+  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0, 0, 0, 0));  // caixa desenhada à mão
 
   if (ImGui::Begin("WaveBar", nullptr, flags)) {
     ImDrawList *dl = ImGui::GetWindowDrawList();
-    const float W  = (float)state.fbWidth;
 
-    // Borda inferior fina
-    dl->AddLine(ImVec2(0, topBarH + barH - 1), ImVec2(W, topBarH + barH - 1),
-                IM_COL32(120, 80, 20, 160), 1.0f);
+    // Caixa arredondada com o lado esquerdo alinhado à caixa de Debug (x=10) e
+    // margem simétrica à direita.
+    const float margin = 10.0f;
+    const float boxL = margin;
+    const float boxR = (float)state.fbWidth - margin;
+    const float boxW = boxR - boxL;
+    const ImVec2 boxP0(boxL, topBarH + 2.0f), boxP1(boxR, topBarH + barH - 2.0f);
+    dl->AddRectFilled(boxP0, boxP1, IM_COL32(14, 12, 8, 224), 5.0f);
+    dl->AddRect(boxP0, boxP1, IM_COL32(90, 60, 15, 160), 5.0f, 0, 1.0f);
 
     if (ws.phase == WavePhase::Victory) {
-      const char *v = "  VICT\xc3\x93RIA!  Todas as ondas foram derrotadas.";
-      ImGui::SetCursorPos(ImVec2((W - ImGui::CalcTextSize(v).x) * 0.5f, 7.0f));
+      const char *v = "VICT\xc3\x93RIA!  Todas as ondas foram derrotadas.";
+      ImGui::SetCursorPos(ImVec2(boxL + (boxW - ImGui::CalcTextSize(v).x) * 0.5f, 7.0f));
       ImGui::TextColored(kColorGold, "%s", v);
     } else {
       const WaveDef &def = kWaves[ws.currentWave];
 
       // Rótulo da onda (esquerda)
       char lbl[24];
-      std::snprintf(lbl, sizeof(lbl), "  ONDA %d / 10", ws.currentWave + 1);
-      const float lblW = 110.0f;
-      ImGui::SetCursorPos(ImVec2(8.0f, 8.0f));
+      std::snprintf(lbl, sizeof(lbl), "ONDA %d / 10", ws.currentWave + 1);
+      const float lblW = 96.0f;
+      ImGui::SetCursorPos(ImVec2(boxL + 12.0f, 8.0f));
       ImGui::TextColored(kColorGold, "%s", lbl);
 
       // Texto de fase (direita)
       char rhs[40];
       if (ws.phase == WavePhase::Intermission) {
         int secs = static_cast<int>(ws.timer) + 1;
-        std::snprintf(rhs, sizeof(rhs), "Em %ds  \xe2\x80\x94  [Y] Pular  ", secs);
+        std::snprintf(rhs, sizeof(rhs), "Em %ds  \xe2\x80\x94  [Y] Pular", secs);
       } else if (ws.phase == WavePhase::Starting) {
-        std::snprintf(rhs, sizeof(rhs), "  INICIANDO...  ");
+        std::snprintf(rhs, sizeof(rhs), "INICIANDO...");
       } else {
-        std::snprintf(rhs, sizeof(rhs), "Mortos: %d / %d  ",
-                      ws.killedCount, def.enemyCount);
+        std::snprintf(rhs, sizeof(rhs), "Mortos: %d / %d", ws.killedCount, def.enemyCount);
       }
       float rhsW = ImGui::CalcTextSize(rhs).x;
-      ImGui::SetCursorPos(ImVec2(W - rhsW - 6.0f, 8.0f));
+      ImGui::SetCursorPos(ImVec2(boxR - rhsW - 12.0f, 8.0f));
       ImVec4 rhsColor = (ws.phase == WavePhase::Intermission) ? kColorMuted
                       : (ws.phase == WavePhase::Starting)      ? kColorGold
                                                                : kColorGreen;
       ImGui::TextColored(rhsColor, "%s", rhs);
 
-      // Barra de progresso (centro, toma o espaço restante)
-      const float barPad = 8.0f;
-      const float bx     = lblW + barPad;
-      const float bw     = W - lblW - rhsW - barPad * 2.0f - 12.0f;
+      // Barra de progresso (centro, toma o espaço restante dentro da caixa)
+      const float barPad = 12.0f;
+      const float bx     = boxL + 12.0f + lblW + barPad;
+      const float bw     = (boxR - 12.0f - rhsW - barPad) - bx;
       const float by     = topBarH + 11.0f;
       const float bh     = 10.0f;
 
@@ -365,19 +507,21 @@ void Hud::renderWaveBar(const AppState &state, const WaveState &ws) {
       if (prog < 0.0f) prog = 0.0f;
       if (prog > 1.0f) prog = 1.0f;
 
-      // Trilho
-      dl->AddRectFilled(ImVec2(bx, by), ImVec2(bx + bw, by + bh),
-                        IM_COL32(25, 16, 5, 220), 4.0f);
-      // Preenchimento
-      if (bw * prog > 1.0f) {
-        ImU32 barColor = (ws.phase == WavePhase::Intermission) ? IM_COL32(60, 120, 200, 230)
-                       : (ws.phase == WavePhase::Starting)      ? IM_COL32(200, 160, 30, 230)
-                                                                : IM_COL32(190, 65, 40, 230);
-        dl->AddRectFilled(ImVec2(bx, by), ImVec2(bx + bw * prog, by + bh), barColor, 4.0f);
+      if (bw > 1.0f) {
+        // Trilho
+        dl->AddRectFilled(ImVec2(bx, by), ImVec2(bx + bw, by + bh),
+                          IM_COL32(25, 16, 5, 220), 4.0f);
+        // Preenchimento
+        if (bw * prog > 1.0f) {
+          ImU32 barColor = (ws.phase == WavePhase::Intermission) ? IM_COL32(60, 120, 200, 230)
+                         : (ws.phase == WavePhase::Starting)      ? IM_COL32(200, 160, 30, 230)
+                                                                  : IM_COL32(190, 65, 40, 230);
+          dl->AddRectFilled(ImVec2(bx, by), ImVec2(bx + bw * prog, by + bh), barColor, 4.0f);
+        }
+        // Moldura
+        dl->AddRect(ImVec2(bx, by), ImVec2(bx + bw, by + bh),
+                    IM_COL32(90, 60, 15, 180), 4.0f);
       }
-      // Moldura
-      dl->AddRect(ImVec2(bx, by), ImVec2(bx + bw, by + bh),
-                  IM_COL32(90, 60, 15, 180), 4.0f);
     }
   }
   ImGui::End();
@@ -567,11 +711,12 @@ void Hud::renderDebugWindow(const AppState &state, float fps) {
 // ---------------------------------------------------------------------------
 void Hud::render(AppState &state, const WaveState &ws, float fps) {
   renderTopBar(state, ws);
-  renderSpellBar(state);
   renderWaveBar(state, ws);
   renderIntermissionOverlay(ws);
   if (ws.phase == WavePhase::Victory) renderVictoryOverlay();
+  renderControlsLegend(state);
   renderDebugWindow(state, fps);
+  renderBuyMenu(state);  // overlay por cima de tudo
 }
 
 void Hud::shutdown() {

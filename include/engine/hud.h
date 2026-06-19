@@ -36,7 +36,11 @@ class Hud {
  private:
   void setupStyle();
   void renderTopBar(AppState &state, const WaveState &ws);
-  void renderSpellBar(AppState &state);
+  // Menu de compra estilo "loja" (tecla M): abas Aliados/Feitiços à esquerda,
+  // cards das opções e painel de detalhe com botão COMPRAR.
+  void renderBuyMenu(AppState &state);
+  // Legenda de atalhos sempre visível (canto inferior esquerdo).
+  void renderControlsLegend(const AppState &state);
   void renderWaveBar(const AppState &state, const WaveState &ws);
   void renderIntermissionOverlay(const WaveState &ws);
   void renderVictoryOverlay();

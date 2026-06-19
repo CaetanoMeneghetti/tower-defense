@@ -17,7 +17,9 @@ namespace {
 
 void mouseCallback(GLFWwindow *window, double xPosIn, double yPosIn) {
   AppState &s = stateFromWindow(window);
-  if (s.cameraMode != CameraMode::Free || s.isDrawingSpell) {
+  // Câmera só gira na Livre; congelada durante desenho de feitiço e com o menu
+  // de compra aberto (o foco é o menu).
+  if (s.cameraMode != CameraMode::Free || s.isDrawingSpell || s.showBuyMenu) {
     return;
   }
 
@@ -90,6 +92,26 @@ void processInput(GLFWwindow *window, Vector<3> &cameraPosition, float deltaTime
 
   // Modo desenho de feitiço congela câmera e atalhos de gameplay.
   if (s.isDrawingSpell) return;
+
+  // Toggle do menu de compra em M (borda de subida). Aberto: libera o cursor.
+  // Fechado: restaura o cursor capturado se a câmera Livre estiver ativa.
+  if (glfwGetKey(window, GLFW_KEY_M) == GLFW_PRESS) {
+    if (!s.mPressed) {
+      s.mPressed = true;
+      s.showBuyMenu = !s.showBuyMenu;
+      if (s.showBuyMenu) {
+        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+      } else if (s.cameraMode == CameraMode::Free) {
+        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+        s.firstMouse = true;
+      }
+    }
+  } else {
+    s.mPressed = false;
+  }
+
+  // Com o menu aberto, congela câmera e demais atalhos (C/T/movimento).
+  if (s.showBuyMenu) return;
 
   if (s.cameraMode == CameraMode::Free) {
     const float speed = kFreeCameraSpeed * deltaTime;

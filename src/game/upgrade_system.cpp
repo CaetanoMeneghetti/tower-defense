@@ -147,8 +147,12 @@ bool drawTroopDetailsHud(GameObject &troop, AppState &state, unsigned int placeh
     ImGui::SameLine();
 
     char btnText[64];
-    std::snprintf(btnText, sizeof(btnText), "UPGRADE - %dg", up.cost);
+    std::snprintf(btnText, sizeof(btnText), "MELHORAR  -  %dg", up.cost);
 
+    // Botão verde (mesma identidade do COMPRAR no menu de loja).
+    ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.20f, 0.45f, 0.16f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.27f, 0.58f, 0.22f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.33f, 0.66f, 0.27f, 1.0f));
     if (ImGui::Button(btnText, ImVec2(-1, 50))) {
       state.gold -= up.cost;
       troop.damage = up.nextDamage;
@@ -156,6 +160,7 @@ bool drawTroopDetailsHud(GameObject &troop, AppState &state, unsigned int placeh
       troop.fireRate = up.nextFireRate;
       didUpgrade = true;
     }
+    ImGui::PopStyleColor(3);
 
     if (!canUpgrade) ImGui::EndDisabled();
   }

@@ -141,19 +141,24 @@ void update(SpellMode &s,
             GLFWwindow *window,
             ShapeClassifier &classifier,
             float deltaTime) {
-  // F (borda de subida) toggla o modo.
+  // F (borda de subida) toggla o modo. O desenho só pode ser INICIADO na câmera
+  // aérea (vista de cima do mapa); sair é sempre permitido.
   bool fNow = (glfwGetKey(window, GLFW_KEY_F) == GLFW_PRESS);
   if (fNow && !s.fKeyDown) {
-    state.isDrawingSpell = !state.isDrawingSpell;
-    if (state.isDrawingSpell) {
-      s.strokes.clear();
-      s.hasCanvas = false;
-      glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+    if (!state.isDrawingSpell && state.cameraMode != CameraMode::Aerial) {
+      // Fora da câmera aérea, F não faz nada.
     } else {
-      // Restaura cursor se a câmera Livre estiver ativa.
-      if (state.cameraMode == CameraMode::Free) {
-        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-        state.firstMouse = true;
+      state.isDrawingSpell = !state.isDrawingSpell;
+      if (state.isDrawingSpell) {
+        s.strokes.clear();
+        s.hasCanvas = false;
+        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+      } else {
+        // Restaura cursor se a câmera Livre estiver ativa.
+        if (state.cameraMode == CameraMode::Free) {
+          glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+          state.firstMouse = true;
+        }
       }
     }
   }
@@ -298,9 +303,53 @@ void render(const SpellMode &s, const AppState &state) {
                       stroke, ImDrawFlags_None, kStrokeThicknessPx);
     }
 
-    // Dica no canto superior.
-    dl->AddText(ImVec2(10.0f, 10.0f), IM_COL32(255, 255, 255, 230),
-                "Desenhe com LMB | ENTER classifica | F sai");
+    // ---- Painel do modo feitiço (topo, centralizado) ----
+    // Mostra as 3 formas disponíveis (cor + nome + cargas) e as instruções, em
+    // vez de só um texto solto. Formas sem carga aparecem esmaecidas.
+    const float panelW = 560.0f, panelH = 88.0f;
+    const float panelX = (state.fbWidth - panelW) * 0.5f;
+    const float panelY = 12.0f;
+    dl->AddRectFilled(ImVec2(panelX, panelY), ImVec2(panelX + panelW, panelY + panelH),
+                      IM_COL32(20, 20, 25, 236), 10.0f);
+    dl->AddRect(ImVec2(panelX, panelY), ImVec2(panelX + panelW, panelY + panelH),
+                IM_COL32(150, 110, 35, 255), 10.0f, 0, 2.0f);
+
+    const char *title = "MODO FEITI\xc3\x87O";
+    dl->AddText(ImVec2(panelX + (panelW - ImGui::CalcTextSize(title).x) * 0.5f, panelY + 8.0f),
+                IM_COL32(255, 216, 70, 255), title);
+
+    struct SpellHint { int cls; const char *name; };
+    const SpellHint hints[3] = {{1, "Lentid\xc3\xa3o"}, {2, "Dano"}, {0, "Veneno"}};
+    const float colW = panelW / 3.0f;
+    const float iconY = panelY + 48.0f;
+    for (int i = 0; i < 3; ++i) {
+      const int cls = hints[i].cls;
+      const int charges = state.spellCharges[cls];
+      const bool has = charges > 0;
+      const float *rgb = kSpellColors[cls];
+      const ImU32 col = IM_COL32(int(rgb[0] * 255), int(rgb[1] * 255), int(rgb[2] * 255),
+                                 has ? 255 : 80);
+      const float cx = panelX + colW * i + 24.0f;
+      const float r = 11.0f;
+      if (cls == 1) {
+        dl->AddRectFilled(ImVec2(cx - r, iconY - r), ImVec2(cx + r, iconY + r), col, 2.0f);
+      } else if (cls == 2) {
+        ImVec2 v[3];
+        triangleVertices(cx, iconY, r, v);
+        dl->AddTriangleFilled(v[0], v[1], v[2], col);
+      } else {
+        dl->AddCircleFilled(ImVec2(cx, iconY), r, col, 24);
+      }
+      char buf[32];
+      std::snprintf(buf, sizeof(buf), "%s  x%d", hints[i].name, charges);
+      dl->AddText(ImVec2(cx + r + 8.0f, iconY - 7.0f),
+                  has ? IM_COL32(235, 228, 210, 255) : IM_COL32(120, 115, 105, 255), buf);
+    }
+
+    const char *instr = "Desenhe a forma    \xe2\x80\xa2    ENTER confirma    \xe2\x80\xa2    F sai";
+    dl->AddText(ImVec2(panelX + (panelW - ImGui::CalcTextSize(instr).x) * 0.5f,
+                       panelY + panelH - 20.0f),
+                IM_COL32(170, 162, 148, 255), instr);
   }
 
   // ---- Janela de resultado + debug crop ----
@@ -313,17 +362,36 @@ void render(const SpellMode &s, const AppState &state) {
                               ImGuiWindowFlags_NoSavedSettings |
                               ImGuiWindowFlags_NoCollapse |
                               ImGuiWindowFlags_NoMove;
-    if (ImGui::Begin("Spell Classifier", nullptr, wflags)) {
-      if (s.lastResult.classIndex >= 0) {
-        ImGui::Text("Classe: %s", s.lastResult.label.c_str());
-      } else {
-        ImGui::Text("Classe: <abaixo do threshold>");
-      }
-      ImGui::Text("Confianca: %.1f%%", s.lastResult.confidence * 100.0f);
+    if (ImGui::Begin("Feiti\xc3\xa7o", nullptr, wflags)) {
+      const ImVec4 gold(1.0f, 0.85f, 0.20f, 1.0f);
+      const ImVec4 green(0.40f, 0.90f, 0.40f, 1.0f);
+      const ImVec4 muted(0.65f, 0.60f, 0.50f, 1.0f);
+
+      ImGui::TextColored(gold, "RESULTADO");
       ImGui::Separator();
-      ImGui::Text("circle   %.3f", s.lastProbs[0]);
-      ImGui::Text("square   %.3f", s.lastProbs[1]);
-      ImGui::Text("triangle %.3f", s.lastProbs[2]);
+
+      if (s.lastResult.classIndex >= 0) {
+        ImGui::SetWindowFontScale(1.25f);
+        ImGui::TextColored(gold, "%s", s.lastResult.label.c_str());
+        ImGui::SetWindowFontScale(1.0f);
+      } else {
+        ImGui::TextColored(muted, "Abaixo do limiar");
+      }
+      ImGui::TextColored(s.lastResult.confidence >= 0.5f ? green : muted,
+                         "Confian\xc3\xa7""a: %.1f%%", s.lastResult.confidence * 100.0f);
+      ImGui::Spacing();
+
+      // Barras de probabilidade por forma, cada uma na cor do feitiço.
+      const char *names[3] = {"C\xc3\xadrculo", "Quadrado", "Tri\xc3\xa2ngulo"};
+      for (int i = 0; i < 3; ++i) {
+        const float *rgb = kSpellColors[i];
+        const ImVec4 col(rgb[0], rgb[1], rgb[2], 1.0f);
+        ImGui::TextColored(col, "%s", names[i]);
+        ImGui::SameLine(90.0f);
+        ImGui::PushStyleColor(ImGuiCol_PlotHistogram, col);
+        ImGui::ProgressBar(s.lastProbs[i], ImVec2(130.0f, 14.0f));
+        ImGui::PopStyleColor();
+      }
     }
     ImGui::End();
 

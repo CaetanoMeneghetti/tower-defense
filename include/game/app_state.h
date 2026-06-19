@@ -35,6 +35,15 @@ struct AppState {
   // lançar um feitiço com carga > 0.
   int spellCharges[3] = {0, 0, 0};
 
+  // ---- Menu de compra (tecla M) ----
+  // Overlay estilo "loja" que abre/fecha com M. Enquanto aberto, o cursor é
+  // liberado e a câmera/atalhos ficam congelados. buyMenuTab: 0=Aliados,
+  // 1=Feitiços. buyMenuSelection: card destacado na aba atual.
+  bool showBuyMenu = false;
+  bool mPressed = false;
+  int  buyMenuTab = 0;
+  int  buyMenuSelection = 0;
+
   // ---- Câmera (modo) ----
   CameraMode cameraMode = CameraMode::Free;
   bool cPressed = false;

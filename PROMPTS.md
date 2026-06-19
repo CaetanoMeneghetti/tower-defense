@@ -151,3 +151,9 @@ Resultado: Funções `init`, `update` e `render` em *spell_mode.cpp*. `update` g
 **PROMPT**: Use cache para otimizar getTransformsAtTime, renderTrees e os glGetUniformLocation.
 
 Resultado: Praticamente todas as mudanças desse commit.
+
+---
+
+**PROMPT**: Crie um menu de compra usando a tecla M, onde existem as abas para compra de feitiços e aliados; crie uma legenda de atalhos no canto inferior esquerdo. Detalhes: feitiço só pode ser desenhado na câmera aérea; frase indicando comando F (para desenho do feitiço) só fica ativa na câmera aérea, tanto como funcionalidade quanto como cor (fica cinza quanto inativo); quando está no menu de compra o mouse não deve conseguir mexer a câmera. Remova o que for obsoleto.
+
+Resultado: Contribuiu parcial ou totalmente para o código das funções `Hud::renderBuyMenu()`, `Hud::renderControlsLegend()`, `drawSpellIcon()`, `Hud::setupStyle()`, `Hud::renderTopBar()`, `Hud::renderWaveBar()`, `Hud::render()`, `Hud::renderSpellBar()`, `spell::render()` e `drawTroopDetailsHud()`.

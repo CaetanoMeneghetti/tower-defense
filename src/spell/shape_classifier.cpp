@@ -136,8 +136,8 @@ bool ShapeClassifier::load(const std::string &modelPath) {
   }
 
   impl_->loaded = true;
-  std::cout << "[ShapeClassifier] carregado: " << modelPath
-            << " (" << floats << " floats)" << std::endl;
+  // std::cout << "[ShapeClassifier] carregado: " << modelPath
+  //           << " (" << floats << " floats)" << std::endl;
   return true;
 }
 
