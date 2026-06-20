@@ -21,6 +21,7 @@ struct KnightInstance {
   bool slashing;
   bool dying = false;
   float deathTimer = 0.0f;
+  int weaponLevel = 1;      // nível de armas (herdado do comandante que invocou)
 };
 
 KnightInstance makeKnight(const PathCache &curveCache);

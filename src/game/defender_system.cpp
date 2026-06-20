@@ -92,6 +92,7 @@ DefenderFireResult updateDefenders(std::vector<GameObject> &defenders,
 
           result.arrowSpawns.push_back(spawn);
           ++result.archerFired;
+          unit.setAnimation("aim", false);  // reinicia para o próximo disparo
         }
       } else if (shoot.aiming) {
         shoot.aiming     = false;
@@ -246,7 +247,7 @@ DefenderFireResult updateDefenders(std::vector<GameObject> &defenders,
 
     // ---- Comandante de Cavaleiros ----
     if (unit.type == defender_types::kKnight) {
-      const float interval = game_constants::kKnightCommandInterval;
+      const float interval = (unit.fireRate > 0.0f) ? unit.fireRate : game_constants::kKnightCommandInterval;
       const float animDur  = game_constants::kKnightCommandAnimDuration;
 
       if (shoot.aiming) {
@@ -263,7 +264,10 @@ DefenderFireResult updateDefenders(std::vector<GameObject> &defenders,
           shoot.shootTimer = 0.0f;
           shoot.aiming     = true;
           unit.setAnimation("command", false);
-          result.knightSummoned += (unit.damage > 0) ? unit.damage : 1;
+          const int count = (unit.damage > 0) ? unit.damage : 1;
+          result.knightSummoned += count;
+          for (int k = 0; k < count; ++k)
+            result.knightWeaponLevels.push_back(unit.level);
           ++result.chargePlayed;
         }
       }

@@ -40,6 +40,7 @@ struct DefenderFireResult {
   int cannonFired    = 0;
   int knightSummoned = 0;
   int chargePlayed   = 0;
+  std::vector<int> knightWeaponLevels;  // nível de armas para cada walking knight a invocar
   std::vector<glm::vec3>  cannonShotPositions;    // boca do canhão (fumaça)
   std::vector<glm::vec3>  cannonImpactPositions;  // ponto de impacto (explosão)
   std::vector<glm::vec3>  arquebusShotPositions;

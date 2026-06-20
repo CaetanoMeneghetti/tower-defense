@@ -1,5 +1,6 @@
 #include "game/troop_placement.h"
 
+#include <cstdlib>
 #include <glad/glad.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -103,11 +104,15 @@ void handleTroopPlacement(const TroopPlacementContext &ctx, AppState &state, flo
     } else if (state.selectedTroopType == defender_types::kKnight) {
       state.gold -= kKnightCost;
       GameObject newKnight(&ctx.knightClass, groundPos);
-      newKnight.damage = 1;  // invocações por comando
-      newKnight.range  = 0.0f;
+      newKnight.damage   = 1;    // invocações por comando
+      newKnight.range    = 0.0f;
+      newKnight.fireRate = game_constants::kKnightCommandInterval;  // intervalo base nível 1
       newKnight.setIdleAnimations({"knightIdle"});
       ctx.defenders.push_back(newKnight);
-      ctx.defenderShoots.push_back(DefenderShoot{});
+      DefenderShoot knightShoot{};
+      // Offset aleatório para que comandantes colocados em momentos diferentes não disparem em sincronia
+      knightShoot.shootTimer = static_cast<float>(std::rand() % 7);
+      ctx.defenderShoots.push_back(knightShoot);
     }
 
     state.isPlacingTroop = false;

@@ -150,6 +150,13 @@ void stopMusic() {
   g_musicActive = false;
 }
 
+void setMusicVolume(float vol) {
+  if (!g_ready || !g_musicActive) return;
+  if (vol < 0.0f) vol = 0.0f;
+  if (vol > 1.0f) vol = 1.0f;
+  ma_sound_set_volume(&g_music, vol);
+}
+
 void startIntermissionMusic(const std::string &path, float volume) {
   if (!g_ready) return;
   if (g_intermissionInited) {

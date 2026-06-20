@@ -61,7 +61,9 @@ void GameObject::setIdleAnimations(const std::vector<std::string> &idles) {
 }
 
 void GameObject::setAnimation(const std::string &animName, bool loop) {
-  if (currentAnimation != animName) {
+  // Animações não-loop (ação) sempre reiniciam do zero — evita congelar no último frame.
+  // Animações de loop (idle/locomoção) só reiniciam se o nome mudou.
+  if (currentAnimation != animName || !loop) {
     currentAnimation = animName;
     animationTime    = 0.0f;
   }

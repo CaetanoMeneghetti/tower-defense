@@ -76,7 +76,7 @@ constexpr float kCannonerBehindOffset = 0.7f;  // quanto o canhoneiro recua do p
 constexpr int kArcherCost   = 50;
 constexpr int kArquebusCost = 75;
 constexpr int kCannonCost   = 100;
-constexpr int kKnightCost   = 80;
+constexpr int kKnightCost   = 250;
 
 // ---- Feitiços (desenho + CNN) ----
 // Cada feitiço é consumível: comprar adiciona 1 carga; desenhar a forma gasta a

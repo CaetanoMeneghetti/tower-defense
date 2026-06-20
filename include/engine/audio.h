@@ -18,9 +18,10 @@ namespace audio {
 
   // Música de batalha (onda ativa) — posição preservada entre pausas
   void playMusic(const std::string &path, float volume = 0.7f);
-  void pauseBattleMusic();   // stop sem uninit; cursor preservado para resumo
-  void resumeBattleMusic();  // retoma de onde parou
-  void stopMusic();          // para e destrói (Victory / cleanup)
+  void pauseBattleMusic();          // stop sem uninit; cursor preservado para resumo
+  void resumeBattleMusic();         // retoma de onde parou
+  void stopMusic();                 // para e destrói (Victory / cleanup)
+  void setMusicVolume(float vol);   // ajusta volume em tempo real (0..1)
 
   // Música de intermission — posição é preservada entre pausas
   void startIntermissionMusic(const std::string &path, float volume = 0.7f);

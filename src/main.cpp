@@ -42,7 +42,6 @@
 
 // ---- game ----
 #include "game/main_menu.h"
-#include "game/selection_screen.h"
 #include "game/app_state.h"
 #include "game/arrow_system.h"
 #include "game/defender_system.h"
@@ -79,8 +78,7 @@
 namespace {
 
 // Set to false to skip the pre-game screens and jump straight into gameplay.
-static constexpr bool kEnableMainMenu        = true;
-static constexpr bool kEnableSelectionScreen = true;
+static constexpr bool kEnableMainMenu = true;
 
 // Grama instanciada com balanço procedural (pode ser desativada para ganhar FPS).
 static constexpr bool kEnableGrass           = true;
@@ -419,7 +417,7 @@ static void renderLoadingFrame(GLFWwindow *window, const char *message, float pr
   int w = 0, h = 0;
   glfwGetFramebufferSize(window, &w, &h);
   glViewport(0, 0, w, h);
-  glClearColor(0.06f, 0.05f, 0.08f, 1.0f);
+  glClearColor(0.04f, 0.03f, 0.06f, 1.0f);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
   ImGui_ImplOpenGL3_NewFrame();
@@ -427,9 +425,29 @@ static void renderLoadingFrame(GLFWwindow *window, const char *message, float pr
   ImGui::NewFrame();
 
   ImDrawList *dl = ImGui::GetForegroundDrawList();
+
+  // Imagem de fundo (carregada uma vez, persiste durante todo o loading)
+  static GLuint sLoadingTex = 0;
+  if (sLoadingTex == 0)
+    sLoadingTex = loadTexture("data/textures/loading.png");
+  if (sLoadingTex) {
+    // Imagem centralizada em ~80% da tela (não cobre tudo)
+    const float imgW = w * 0.80f, imgH = h * 0.80f;
+    const float ix = (w - imgW) * 0.5f, iy = (h - imgH) * 0.5f;
+    dl->AddImage((void *)(intptr_t)sLoadingTex,
+                 ImVec2(ix, iy), ImVec2(ix + imgW, iy + imgH),
+                 ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f),
+                 IM_COL32(195, 192, 208, 235));
+  }
+
   const float cx = w * 0.5f, cy = h * 0.5f;
 
-  const char *title = "1346AD: IRON & BLOOD";
+  // Fundo escuro semitransparente atrás dos textos para legibilidade
+  dl->AddRectFilled(ImVec2(cx - 230.0f, cy - 82.0f),
+                    ImVec2(cx + 230.0f, cy + 52.0f),
+                    IM_COL32(8, 6, 14, 168), 6.0f);
+
+  const char *title = "1348AD: BLOOD & IRON";
   ImVec2 tsz = ImGui::CalcTextSize(title);
   dl->AddText(ImVec2(cx - tsz.x * 0.5f, cy - 64.0f), IM_COL32(235, 200, 90, 255), title);
 
@@ -495,16 +513,8 @@ int run(GLFWwindow *window) {
   // Back from SelectionScreen loops back to MainMenu.
   // ---------------------------------------------------------------------------
   if (kEnableMainMenu) {
-    while (true) {
-      MainMenu mainMenu;
-      if (!mainMenu.run(window)) return 0;  // Quit
-
-      if (!kEnableSelectionScreen) break;
-
-      SelectionScreen selScreen;
-      if (selScreen.run(window)) break;     // Begin — exit loop, load game
-      // Back was clicked: loop back to MainMenu
-    }
+    MainMenu mainMenu;
+    if (!mainMenu.run(window)) return 0;
   }
 
   glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
@@ -585,11 +595,18 @@ int run(GLFWwindow *window) {
   archerBaseLvl5.loadAnimation("idle1", "data/models/archer/idle1.glb");
   archerBaseLvl5.loadAnimation("aim", "data/models/archer/aim_draw.glb");
 
-  // Canhoneiro — tier único (sem modelos por nível ainda)
+  // Canhoneiro — 5 tiers (modelos t1–t5, mesmas animações)
   AnimatedModel cannonerBase("data/models/cannon/cannoner_t.glb");
-  cannonerBase.loadAnimation("idle1", "data/models/cannon/cannoner_idle.glb");
-  cannonerBase.loadAnimation("fire",  "data/models/cannon/cannoner_fire.glb");
-  cannonerBase.loadAnimation("cower", "data/models/cannon/cannoner_cower.glb");
+  AnimatedModel cannonerBase2("data/models/cannon/cannoner_t2.glb");
+  AnimatedModel cannonerBase3("data/models/cannon/cannoner_t3.glb");
+  AnimatedModel cannonerBase4("data/models/cannon/cannoner_t4.glb");
+  AnimatedModel cannonerBase5("data/models/cannon/cannoner_t5.glb");
+  for (AnimatedModel *m : {&cannonerBase, &cannonerBase2, &cannonerBase3,
+                            &cannonerBase4, &cannonerBase5}) {
+    m->loadAnimation("idle1", "data/models/cannon/cannoner_idle.glb");
+    m->loadAnimation("fire",  "data/models/cannon/cannoner_fire.glb");
+    m->loadAnimation("cower", "data/models/cannon/cannoner_cower.glb");
+  }
 
   AnimatedModel knightBase("data/models/knight/knight_t.glb");
   knightBase.loadAnimation("knightWalk",  "data/models/knight/knight_walk.glb");
@@ -628,6 +645,16 @@ if (!loadObj("data/models/knight/shield.obj", shieldVertices)) {
   std::cout << "ERRO: Nao encontrou shield.obj" << std::endl;
 }
 Mesh shieldMesh(shieldVertices);
+
+std::vector<Vertex> sword2Vertices, sword3Vertices, shield2Vertices, shield3Vertices;
+loadObj("data/models/knight/sword2.obj",  sword2Vertices);
+loadObj("data/models/knight/sword3.obj",  sword3Vertices);
+loadObj("data/models/knight/shield2.obj", shield2Vertices);
+loadObj("data/models/knight/shield3.obj", shield3Vertices);
+Mesh sword2Mesh(sword2Vertices.empty() ? swordVertices  : sword2Vertices);
+Mesh sword3Mesh(sword3Vertices.empty() ? sword2Vertices.empty() ? swordVertices : sword2Vertices : sword3Vertices);
+Mesh shield2Mesh(shield2Vertices.empty() ? shieldVertices : shield2Vertices);
+Mesh shield3Mesh(shield3Vertices.empty() ? shield2Vertices.empty() ? shieldVertices : shield2Vertices : shield3Vertices);
   // Quad plano XZ para o círculo de seleção (centrado na origem, escala via matrix)
   std::vector<Vertex> circleQuadVerts = {
       {{-1.0f, 0.0f, -1.0f}, {0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}},
@@ -814,13 +841,20 @@ Mesh shieldMesh(shieldVertices);
 
   TroopDef cannonClass;
   cannonClass.type = defender_types::kCannon;
-  addTier(cannonClass, &cannonerBase, tex.cannonerColor, tex.cannonerNormal,
-          nullptr, 0, glm::mat4(1.0f));
+  for (AnimatedModel *m : {&cannonerBase, &cannonerBase2, &cannonerBase3,
+                            &cannonerBase4, &cannonerBase5}) {
+    addTier(cannonClass, m, tex.cannonerColor, tex.cannonerNormal,
+            nullptr, 0, glm::mat4(1.0f));
+  }
 
   TroopDef knightClass;
   knightClass.type = defender_types::kKnight;
-  addTier(knightClass, &knightBase, tex.knightColor, tex.knightNormal,
-  nullptr, 0, glm::mat4(1.0f));
+  // Apenas 1 modelo de corpo — os upgrades trocam espada/escudo alternadamente.
+  // Todos os 5 tiers apontam pro mesmo AnimatedModel.
+  for (int i = 0; i < 5; ++i) {
+    addTier(knightClass, &knightBase, tex.knightColor, tex.knightNormal,
+            nullptr, 0, glm::mat4(1.0f));
+  }
 
   // ---------------------------------------------------------------------------
   // Estado de combate + iluminação
@@ -956,7 +990,15 @@ Mesh shieldMesh(shieldVertices);
         default:                        model = &normalEnemyModels[i];  break;
       }
       enemyTicks[i] = updateEnemy(e, *model, curvePoints, curveCache, state, deltaTime);
-      if (enemyTicks[i].diedThisFrame) ++deathsThisFrame;
+      if (enemyTicks[i].diedThisFrame) {
+        ++deathsThisFrame;
+        switch (e.stats.type) {
+          case enemy_types::kArmored:     state.gold += 35; break;
+          case enemy_types::kCharger:     state.gold +=  40; break;
+          case enemy_types::kNecromancer: state.gold += 50; break;
+          default:                        state.gold +=  20; break; // kNormal
+        }
+      }
     }
 
     // ------- UPDATE: wave system -------
@@ -1071,7 +1113,11 @@ Mesh shieldMesh(shieldVertices);
 
     // Invocações dos comandantes de cavaleiros
     for (int n = 0; n < fireResult.knightSummoned; ++n) {
-      walkingKnights.push_back(makeKnight(curveCache));
+      KnightInstance k = makeKnight(curveCache);
+      k.pathDistance -= n * 1.5f;  // escalar posições para não empilhar
+      if (n < (int)fireResult.knightWeaponLevels.size())
+        k.weaponLevel = fireResult.knightWeaponLevels[n];
+      walkingKnights.push_back(k);
       walkingKnightModels.emplace_back(&knightClass, Vector<3>{0.0f, 0.0f, 0.0f});
       walkingKnightModels.back().setIdleAnimations({"knightWalk"});
       walkingKnightModels.back().setAnimation("knightWalk");
@@ -1205,7 +1251,7 @@ Mesh shieldMesh(shieldVertices);
                   eTex, tex.defaultNormal);
     }
 
-    for (int i = 0; i < (int)walkingKnights.size(); ++i) {
+    for (int i = 0; i < (int)walkingKnightTicks.size(); ++i) {
       if (!walkingKnights[i].alive && !walkingKnights[i].dying) continue;
       renderKnight(pipe.animShader, walkingKnightModels[i],
                    walkingKnightTicks[i].position, walkingKnightTicks[i].angle,
@@ -1220,12 +1266,30 @@ Mesh shieldMesh(shieldVertices);
                           bowMesh, tex.bowColor, torchMesh, tex.torchColor);
     renderArrows(pipe.objShader, pipe.objU, arrows, arrowMesh, arrowTex);
     renderCannonBarrels(pipe.objShader, pipe.objU, defenders, cannonBarrelMesh, tex.cannonBarrelColor);
-    for (int i = 0; i < (int)walkingKnights.size(); ++i) {
+    for (int i = 0; i < (int)walkingKnightTicks.size(); ++i) {
       if (!walkingKnights[i].alive && !walkingKnights[i].dying) continue;
+      const int wlvl = walkingKnights[i].weaponLevel;
+      Mesh &wSword  = (wlvl >= 4) ? sword3Mesh : (wlvl >= 2) ? sword2Mesh : swordMesh;
+      Mesh &wShield = (wlvl >= 5) ? shield3Mesh : (wlvl >= 3) ? shield2Mesh : shieldMesh;
       renderKnightWeapons(pipe.objShader, pipe.objU, walkingKnightModels[i],
-                          swordMesh, tex.swordColor,
-                          shieldMesh, tex.shieldColor,
+                          wSword, tex.swordColor,
+                          wShield, tex.shieldColor,
                           weaponTweaks);
+    }
+    // Armas dos knights colocados como defensores — espada/escudo por nível.
+    // Padrão alternado: ímpar=espada, par=escudo.
+    //   nível 1: sword1 + shield1
+    //   nível 2: sword2 + shield1  (upgrade espada)
+    //   nível 3: sword2 + shield2  (upgrade escudo)
+    //   nível 4: sword3 + shield2  (upgrade espada)
+    //   nível 5: sword3 + shield3  (upgrade escudo)
+    for (auto &unit : defenders) {
+      if (unit.type != defender_types::kKnight) continue;
+      const int lvl = unit.level;
+      Mesh &sw = (lvl >= 4) ? sword3Mesh : (lvl >= 2) ? sword2Mesh : swordMesh;
+      Mesh &sh = (lvl >= 5) ? shield3Mesh : (lvl >= 3) ? shield2Mesh : shieldMesh;
+      renderKnightWeapons(pipe.objShader, pipe.objU, unit,
+                          sw, tex.swordColor, sh, tex.shieldColor, weaponTweaks);
     }
     renderCastle(pipe.objShader, pipe.objU, castleGroups,
                  curvePoints);
@@ -1525,16 +1589,12 @@ int main() {
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-  // Tela cheia no monitor primário, sempre na resolução nativa do monitor.
-  GLFWmonitor      *monitor = glfwGetPrimaryMonitor();
-  const GLFWvidmode *mode   = glfwGetVideoMode(monitor);
-  glfwWindowHint(GLFW_RED_BITS,     mode->redBits);
-  glfwWindowHint(GLFW_GREEN_BITS,   mode->greenBits);
-  glfwWindowHint(GLFW_BLUE_BITS,    mode->blueBits);
-  glfwWindowHint(GLFW_REFRESH_RATE, mode->refreshRate);
+  // Janela maximizada na resolução nativa do monitor (sem fullscreen).
+  const GLFWvidmode *mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
+  glfwWindowHint(GLFW_MAXIMIZED, GLFW_TRUE);
 
   GLFWwindow *window = glfwCreateWindow(
-      mode->width, mode->height, render_constants::kWindowTitle, monitor, nullptr);
+      mode->width, mode->height, render_constants::kWindowTitle, nullptr, nullptr);
   if (window == nullptr) {
     glfwTerminate();
     return 1;

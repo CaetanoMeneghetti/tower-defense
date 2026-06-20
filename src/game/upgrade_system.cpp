@@ -9,28 +9,28 @@ struct UpgradeEntry { int cost, dmg; float range, fireRate; const char *desc; };
 
 // Tabela de upgrades: [nível atual 1..4] → stats do próximo nível (2..5).
 const UpgradeEntry kArcher[4] = {
-    {50,  12, 18.0f, 1.8f, "Nivel 2: Flechas de Ponta Larga.\nAumenta levemente o dano base e o alcance para conter os primeiros inimigos."},
-    {120, 16, 22.0f, 1.5f, "Nivel 3: Treinamento de Cadencia.\nOs arqueiros disparam consideravelmente mais rapido. Excelente contra hordas."},
-    {250, 22, 25.0f, 1.2f, "Nivel 4: Arcos de Madeira Composta.\nEquipamento superior que garante projeteis mais rapidos e dano letal."},
-    {500, 35, 30.0f, 0.8f, "Nivel 5: Mestres Arqueiros.\nO auge da arquearia. Chuva de flechas implacavel com alcance cobrindo quase todo o campo."},
+    {50,  12, 18.0f, 1.8f, "Nivel 2: Flechas de Ponta Larga\nAumenta levemente o dano base e o alcance."},
+    {100, 14, 18.0f, 1.35f, "Nivel 3: Treinamento de Cadencia\nOs arqueiros disparam consideravelmente mais rapido. Excelente contra hordas."},
+    {150, 22, 24.0f, 1.35f, "Nivel 4: Arcos de Madeira Composta\nEquipamento superior que garante projeteis mais rapidos e dano letal."},
+    {200, 28, 28.0f, 0.85f, "Nivel 5: Mestres Arqueiros\nTreinamento de elite diminui o tempo entre disparos e"},
 };
 const UpgradeEntry kArquebus[4] = {
-    {80,  25, 16.0f, 1.9f, "Nivel 2: Polvora Refinada.\nReduz os detritos no cano, aumentando ligeiramente a cadencia de disparo."},
-    {180, 45, 17.0f, 1.9f, "Nivel 3: Balas de Chumbo Pesadas.\nFoca inteiramente no impacto. Dano massivo capaz de rasgar armaduras medias."},
-    {350, 70, 19.0f, 1.8f, "Nivel 4: Cano Longo Estriado.\nMelhora a precisao a longas distancias, permitindo atirar um pouco mais longe com forca total."},
-    {700, 120, 22.0f, 1.5f, "Nivel 5: Mosqueteiros de Elite.\nArmamento de ponta. Cada tiro e um canhao portatil com tempo de recarga otimizado."},
+    {100,  25, 16.0f, 1.8f, "Nivel 2: Polvora Refinada\nReduz os detritos no cano, aumentando ligeiramente a cadencia de disparo."},
+    {150, 55, 16.0f, 1.8f, "Nivel 3: Balas de Chumbo Pesadas\nBalas de chumbo causam dano massivo."},
+    {250, 110, 22.0f, 1.8f, "Nivel 4: Cano Longo Estriado\nMelhora a precisao a longas distancias, permitindo atirar um pouco mais longe com forca total."},
+    {400, 125, 22.0f, 1.0f, "Nivel 5: Mecanismo Flintlock\nMecanismo mais sofisticado de ignição aumenta a taxa de disparo significamente."},
 };
 const UpgradeEntry kCannon[4] = {
-    {120, 55, 14.0f, 2.5f, "Nivel 2: Polvora Grossa.\nCarga mais potente aumenta o dano da bala de canhao e o alcance ligeiramente."},
-    {250, 80, 16.0f, 2.3f, "Nivel 3: Bala de Ferro Macico.\nProjetil mais denso rasga qualquer armadura. Dano expressivo."},
-    {450, 120, 18.0f, 2.0f, "Nivel 4: Cano Reforçado.\nMelhor guia e maior pressao de gas, ampliando alcance e cadencia."},
-    {900, 200, 22.0f, 1.8f, "Nivel 5: Basilisco de Guerra.\nO maior canhao de campo. Cada disparo e devastador e cobre quase todo o campo de batalha."},
+    {150, 55, 14.0f, 2.5f, "Nivel 2: Polvora Grossa.\nCarga mais potente aumenta o dano da bala de canhao e o alcance ligeiramente."},
+    {250, 100, 14.0f, 2.5f, "Nivel 3: Bala de Ferro Macico.\nProjetil mais denso rasga qualquer armadura. Dano expressivo."},
+    {450, 140, 18.0f, 2.0f, "Nivel 4: Treinamento de artilharia\nDiminui o tempo de recarregar."},
+    {600, 220, 30.0f, 2.0f, "Nivel 5: Artilharia de cerco.\nCanhão avançado que causa dano massivo e possui alcance superior"},
 };
 const UpgradeEntry kCommander[4] = {
-    {60,  2, 0.0f, 0.0f, "Nivel 2: Chamado de Guerra.\nO comandante passa a invocar 2 cavaleiros a cada chamada."},
-    {140, 3, 0.0f, 0.0f, "Nivel 3: Esquadrao de Ferro.\nO chamado mobiliza 3 cavaleiros imediatamente."},
-    {280, 4, 0.0f, 0.0f, "Nivel 4: Carga da Cavalaria.\nQuatro cavaleiros avancam a cada invocacao. Os inimigos nao podem deter a mare."},
-    {500, 6, 0.0f, 0.0f, "Nivel 5: Legiao Infindavel.\nSeis cavaleiros por chamada — uma avalanche de aco que esmagara qualquer horda."},
+    {50,  1, 0.0f, 8.0f, "Nivel 2: Grito de guerra\nDiminui o intervalo de tempo entre chamados."},
+    {250, 2, 0.0f, 7.8f, "Nivel 3: Treinamento em massa\n Aumenta a qunatidade de cavaleiros chamados"},
+    {300, 2, 0.0f, 7.0f, "Nivel 4: Comandante\nDiminui o intervalo de tempo entre chamados."},
+    {500, 3, 0.0f, 7.0f, "Nivel 5: General\n Chama um trio de cavaleiros a cada chamado."},
 };
 }  // namespace
 

@@ -18,7 +18,7 @@ enum class CameraMode { Free, Aerial, Orbital };
 
 struct AppState {
   // ---- Jogador ----
-  int gold = 99999;
+  int gold = 100;
   int health = 100;
 
   // ---- Posicionamento de tropas ----
