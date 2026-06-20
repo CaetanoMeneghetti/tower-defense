@@ -49,6 +49,8 @@ class Hud {
   // Legenda de atalhos sempre visível (canto inferior esquerdo).
   void renderControlsLegend(const AppState &state);
   void renderWaveBar(const AppState &state, const WaveState &ws);
+  // Overlay central "PAUSA" (tecla P). Mostrado por cima de tudo quando pausado.
+  void renderPauseOverlay(const AppState &state);
   void renderIntermissionOverlay(const WaveState &ws);
   void renderVictoryOverlay();
   void renderDebugWindow(AppState &state, float fps);

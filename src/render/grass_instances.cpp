@@ -24,9 +24,19 @@ GrassField buildGrassField(GLuint shader, GLuint texture,
   std::uniform_real_distribution<float> jitterDist(-spacing * 0.45f, spacing * 0.45f);
   std::uniform_real_distribution<float> rotDist(0.0f, math_constants::kTwoPi);
   std::uniform_real_distribution<float> scaleDist(0.55f, 0.85f);
+  std::uniform_real_distribution<float> keepDist(0.0f, 1.0f);
 
   const int stepsX = static_cast<int>(areaHalfX / spacing);
   const int stepsZ = static_cast<int>(areaHalfZ / spacing);
+
+  // Densidade da grama cai com a distância ao centro do mapa (0,0): cheia só no
+  // núcleo (24% do raio máximo) e decai de forma QUADRÁTICA até zero no canto mais
+  // distante. O decaimento quadrático mantém o núcleo denso igual ao de antes mas
+  // deixa a borda bem esparsa, então a grama alcança bem mais longe sem explodir a
+  // contagem de instâncias (instancing desenha todas) — preservando o FPS.
+  const float maxRadius  = std::sqrt(areaHalfX * areaHalfX + areaHalfZ * areaHalfZ);
+  const float fullRadius = maxRadius * 0.24f;
+  const float fallSpan   = maxRadius - fullRadius;
 
   std::vector<glm::mat4> matrices;
   std::vector<glm::mat3> normalMatrices;
@@ -38,6 +48,16 @@ GrassField buildGrassField(GLuint shader, GLuint texture,
       float x = i * spacing + jitterDist(rng);
       float z = j * spacing + jitterDist(rng);
       if (distanceToPath(curvePoints, x, z) < pathClearance) continue;
+
+      // Redução gradual de densidade conforme se afasta do centro do mapa.
+      // Queda quadrática: linear² faz a borda decair mais rápido que o núcleo.
+      const float radius = std::sqrt(x * x + z * z);
+      float keepProb = 1.0f;
+      if (radius > fullRadius) {
+        const float linear = 1.0f - (radius - fullRadius) / fallSpan;
+        keepProb = linear > 0.0f ? linear * linear : 0.0f;
+      }
+      if (keepProb <= 0.0f || keepDist(rng) > keepProb) continue;
 
       float s = baseScale * scaleDist(rng);
       float r = rotDist(rng);

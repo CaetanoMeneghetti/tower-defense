@@ -93,6 +93,19 @@ void processInput(GLFWwindow *window, Vector<3> &cameraPosition, float deltaTime
   // Modo desenho de feitiço congela câmera e atalhos de gameplay.
   if (s.isDrawingSpell) return;
 
+  // Toggle de pausa em P (borda de subida). Pausado: congela tudo e bloqueia os
+  // demais atalhos (só P volta a responder). A simulação só avança quando o loop
+  // principal vê paused == false, então retomar não causa salto de tempo.
+  if (glfwGetKey(window, GLFW_KEY_P) == GLFW_PRESS) {
+    if (!s.pPressed) {
+      s.pPressed = true;
+      s.paused = !s.paused;
+    }
+  } else {
+    s.pPressed = false;
+  }
+  if (s.paused) return;
+
   // Toggle do menu de compra em M (borda de subida). Aberto: libera o cursor.
   // Fechado: restaura o cursor capturado se a câmera Livre estiver ativa.
   if (glfwGetKey(window, GLFW_KEY_M) == GLFW_PRESS) {

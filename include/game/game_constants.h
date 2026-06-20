@@ -34,6 +34,14 @@ constexpr float kTreeBaseScale = 1.0f;
 constexpr int kTreeCount = 1000;
 constexpr int kMaxTreeAttempts = kTreeCount * 40;
 
+// Densidade de árvores cai gradualmente com a distância ao centro do mapa (0,0):
+// densidade cheia até kTreeFullDensityRadius e decai linearmente até zero em
+// kTreeFalloffRadius. Como a névoa começa em kFogStart = 60, árvores além disso
+// já ficam encobertas; cortar cedo (zero além de 66) elimina muitas instâncias
+// distantes e prioriza o FPS, com perda visual mínima. Valores em unidades de mundo.
+constexpr float kTreeFullDensityRadius = 30.0f;
+constexpr float kTreeFalloffRadius     = 66.0f;
+
 // ---- Lanternas ----
 // Distância de arco entre duas lanternas consecutivas no mesmo lado.
 // A contagem total é derivada de (totalArcLength / kLanternSpacing) * 2,

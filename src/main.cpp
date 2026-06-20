@@ -451,7 +451,7 @@ static void renderLoadingFrame(GLFWwindow *window, const char *message, float pr
                     ImVec2(cx + 230.0f, cy + 52.0f),
                     IM_COL32(8, 6, 14, 168), 6.0f);
 
-  const char *title = "1348AD: BLOOD & IRON";
+  const char *title = "1346AD: BLOOD & IRON";
   ImVec2 tsz = ImGui::CalcTextSize(title);
   dl->AddText(ImVec2(cx - tsz.x * 0.5f, cy - 64.0f), IM_COL32(235, 200, 90, 255), title);
 
@@ -818,7 +818,7 @@ Mesh shield3Mesh(shield3Vertices.empty() ? shield2Vertices.empty() ? shieldVerti
         pipe.grassSwayShader, tex.grass.color,
         curvePoints,
         /*pathClearance=*/2.2f,
-        /*areaHalfX=*/32.0f, /*areaHalfZ=*/22.0f,
+        /*areaHalfX=*/58.0f, /*areaHalfZ=*/44.0f,
         /*spacing=*/0.55f, /*baseScale=*/0.55f);
     grassInstanceModel->setupInstanceBuffer(grassField.instanceVBO);
     grassInstanceModel->setupNormalBuffer(grassField.normalVBO);
@@ -997,18 +997,26 @@ Mesh shield3Mesh(shield3Vertices.empty() ? shield2Vertices.empty() ? shieldVerti
   bool  endAnimSet     = false;
 
   double lastTime = glfwGetTime();
+  float animTime = 0.0f;  // tempo de animação ambiental (grama); congela na pausa
   while (!glfwWindowShouldClose(window)) {
     double currentTime = glfwGetTime();
 #ifdef NDEBUG
     if (currentTime - lastTime < kFrameDelay) {
       continue;
     }
-    const float deltaTime = static_cast<float>(kFrameDelay);
+    const float frameDelta = static_cast<float>(kFrameDelay);
     lastTime += kFrameDelay;
 #else
-    const float deltaTime = static_cast<float>(currentTime - lastTime);
+    const float frameDelta = static_cast<float>(currentTime - lastTime);
     lastTime = currentTime;
 #endif
+
+    // Pausa (tecla P): congela a simulação zerando o avanço de tempo deste frame.
+    // Como todos os updates recebem deltaTime = 0, nenhum estado avança (inimigos,
+    // animações, timers, projéteis), então retomar é seguro e não há salto de tempo
+    // — `lastTime` é atualizado todo frame, inclusive pausado.
+    const float deltaTime = state.paused ? 0.0f : frameDelta;
+    animTime += deltaTime;
 
     selectionAngle += 0.5f * deltaTime;
     if (selectionAngle >= math_constants::kTwoPi) selectionAngle -= math_constants::kTwoPi;
@@ -1210,7 +1218,8 @@ Mesh shield3Mesh(shield3Vertices.empty() ? shield2Vertices.empty() ? shieldVerti
     }
     // ------- INPUT por frame -------
     processInput(window, cameraPosition, deltaTime);
-    spell::update(spellMode, state, window, spellClassifier, deltaTime);
+    if (!state.paused)
+      spell::update(spellMode, state, window, spellClassifier, deltaTime);
 
     // ------- Clear + camera setup -------
     glClearColor(kFogColor.r, kFogColor.g, kFogColor.b, 1.0f);
@@ -1370,7 +1379,7 @@ Mesh shield3Mesh(shield3Vertices.empty() ? shield2Vertices.empty() ? shieldVerti
 
     // ------- RENDER: grama com balanço -------
     if constexpr (kEnableGrass) {
-      renderGrassField(grassField, *grassInstanceModel, static_cast<float>(currentTime),
+      renderGrassField(grassField, *grassInstanceModel, animTime,
                        moonLight.direction, moonLight.ambient, moonLight.diffuse,
                        kFogColor, kFogStart, kFogEnd,
                        glmViewPos,
@@ -1480,7 +1489,7 @@ Mesh shield3Mesh(shield3Vertices.empty() ? shield2Vertices.empty() ? shieldVerti
     }
 
     // ------- RENDER: preview de posicionamento de tropa -------
-    if (state.isPlacingTroop && !state.isDrawingSpell) {
+    if (state.isPlacingTroop && !state.isDrawingSpell && !state.paused) {
       TroopPlacementContext ctx{
           window, cam, renderCameraPos, curvePoints, pipe.previewShader,
           archerClass, arquebusClass, cannonClass, knightClass,
@@ -1491,8 +1500,9 @@ Mesh shield3Mesh(shield3Vertices.empty() ? shield2Vertices.empty() ? shieldVerti
     }
 
     // ------- SELEÇÃO DE TROPA (clique no mundo) -------
-    selectedTroopIndex = troop_selection::update(
-        window, cam, renderCameraPos, defenders, state, selectedTroopIndex);
+    if (!state.paused)
+      selectedTroopIndex = troop_selection::update(
+          window, cam, renderCameraPos, defenders, state, selectedTroopIndex);
 
     // ------- RENDER: fumaça + explosões -------
     {

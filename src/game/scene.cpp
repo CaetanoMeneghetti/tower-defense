@@ -15,19 +15,32 @@ std::vector<TreeInstance> placeTrees(const std::vector<Point> &curvePoints) {
   trees.reserve(kTreeCount);
 
   std::mt19937 rng(static_cast<unsigned int>(time(NULL)));
-  std::uniform_real_distribution<float> posDist(
-      -kMapHalfSize + kTreeBorderMargin, kMapHalfSize - kTreeBorderMargin);
+  // Gera candidatos só dentro do raio de falloff (além dele nada é aceito), o que
+  // já concentra as tentativas na região visível.
+  std::uniform_real_distribution<float> posDist(-kTreeFalloffRadius, kTreeFalloffRadius);
   std::uniform_real_distribution<float> rotDist(0.0f, math_constants::kTwoPi);
   std::uniform_real_distribution<float> scaleDist(0.8f, 1.4f);
+  std::uniform_real_distribution<float> keepDist(0.0f, 1.0f);
 
   const float minSpacingSq = kTreeMinSpacing * kTreeMinSpacing;
   const float pathAvoidDist = kPathHalfWidth + kTreePathBuffer;
+  const float falloffSpan = kTreeFalloffRadius - kTreeFullDensityRadius;
   int attempts = 0;
   while (static_cast<int>(trees.size()) < kTreeCount && attempts < kMaxTreeAttempts) {
     ++attempts;
 
     const float x = posDist(rng);
     const float z = posDist(rng);
+
+    // Redução gradual de densidade conforme se afasta do centro do mapa (0,0).
+    // keepProb: 1 até o raio cheio, decai linearmente até 0 no raio de falloff.
+    const float radius = std::sqrt(x * x + z * z);
+    const float keepProb = (radius <= kTreeFullDensityRadius)
+                               ? 1.0f
+                               : 1.0f - (radius - kTreeFullDensityRadius) / falloffSpan;
+    if (keepProb <= 0.0f || keepDist(rng) > keepProb) {
+      continue;
+    }
 
     if (distanceToPath(curvePoints, x, z) < pathAvoidDist) {
       continue;

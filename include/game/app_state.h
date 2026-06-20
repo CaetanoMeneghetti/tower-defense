@@ -44,6 +44,12 @@ struct AppState {
   int  buyMenuTab = 0;
   int  buyMenuSelection = 0;
 
+  // ---- Pausa (tecla P) ----
+  // Quando true, o loop congela a simulação (deltaTime = 0) e mostra um overlay.
+  // Não corrompe estado: nenhum update avança, então retomar é seguro.
+  bool paused = false;
+  bool pPressed = false;
+
   // ---- Câmera (modo) ----
   CameraMode cameraMode = CameraMode::Free;
   bool cPressed = false;

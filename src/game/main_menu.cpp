@@ -979,10 +979,10 @@ void MainMenu::renderUI(float W, float H, bool &outEnter, bool &outQuit) {
   // Título e créditos via foreground draw list (sem janela interativa)
   ImDrawList *dl = ImGui::GetForegroundDrawList();
 
-  // Título "1348AD: BLOOD & IRON" centrado no topo
+  // Título "1346AD: BLOOD & IRON" centrado no topo
   if (titleFont_) {
     constexpr float kTitleSize = 48.0f;
-    const char *title = "1348AD: BLOOD & IRON";
+    const char *title = "1346AD: BLOOD & IRON";
     ImVec2 tsz = titleFont_->CalcTextSizeA(kTitleSize, FLT_MAX, 0.0f, title);
     const float tx = (W - tsz.x) * 0.5f;
     const float ty = H * 0.06f;

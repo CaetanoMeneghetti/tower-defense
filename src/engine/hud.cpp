@@ -415,6 +415,7 @@ void Hud::renderControlsLegend(const AppState &state) {
       {"M",    "  Menu de compra"},
       {"C",    "  Trocar c\xc3\xa2mera"},
       {"F",    "  Desenhar feiti\xc3\xa7o"},
+      {"P",    "  Pausar / continuar"},
       {"T",    "  Curva (debug)"},
       {"Y",    "  Pular intermiss\xc3\xa3o"},
       {"WASD", "  Mover c\xc3\xa2mera"},
@@ -550,6 +551,47 @@ void Hud::renderWaveBar(const AppState &state, const WaveState &ws) {
                     IM_COL32(90, 60, 15, 180), 4.0f);
       }
     }
+  }
+  ImGui::End();
+  ImGui::PopStyleColor();
+  ImGui::PopStyleVar();
+}
+
+// ---------------------------------------------------------------------------
+// Overlay de Pausa (tecla P) — escurece a tela e mostra "PAUSA" no centro.
+// ---------------------------------------------------------------------------
+void Hud::renderPauseOverlay(const AppState &state) {
+  if (!state.paused) return;
+
+  const float W = (float)state.fbWidth;
+  const float H = (float)state.fbHeight;
+
+  ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always);
+  ImGui::SetNextWindowSize(ImVec2(W, H), ImGuiCond_Always);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0, 0, 0, 0));
+
+  ImGuiWindowFlags flags =
+      ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings |
+      ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs |
+      ImGuiWindowFlags_NoBringToFrontOnFocus;
+
+  if (ImGui::Begin("##Pause", nullptr, flags)) {
+    ImDrawList *dl = ImGui::GetWindowDrawList();
+    // Escurece a cena inteira.
+    dl->AddRectFilled(ImVec2(0, 0), ImVec2(W, H), IM_COL32(0, 0, 0, 140));
+
+    const char *title = "PAUSA";
+    ImGui::SetWindowFontScale(3.0f);
+    ImVec2 tsz = ImGui::CalcTextSize(title);
+    ImGui::SetCursorPos(ImVec2((W - tsz.x) * 0.5f, H * 0.5f - tsz.y));
+    ImGui::TextColored(kColorGold, "%s", title);
+    ImGui::SetWindowFontScale(1.0f);
+
+    const char *sub = "[P] continuar";
+    ImVec2 ssz = ImGui::CalcTextSize(sub);
+    ImGui::SetCursorPos(ImVec2((W - ssz.x) * 0.5f, H * 0.5f + tsz.y * 0.5f));
+    ImGui::TextColored(kColorCream, "%s", sub);
   }
   ImGui::End();
   ImGui::PopStyleColor();
@@ -780,6 +822,7 @@ void Hud::render(AppState &state, const WaveState &ws, float fps) {
   renderControlsLegend(state);
   renderDebugWindow(state, fps);
   renderBuyMenu(state);  // overlay por cima de tudo
+  renderPauseOverlay(state);  // pausa por cima de tudo (inclusive menu)
 }
 
 void Hud::shutdown() {
