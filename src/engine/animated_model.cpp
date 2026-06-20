@@ -256,12 +256,25 @@ glm::mat4 AnimatedModel::interpolateTranslation(float time, const aiNodeAnim *no
     const auto &p = nodeAnim->mPositionKeys[0].mValue;
     return translationMatrix(p.x, p.y, p.z);
   }
+  // Segurar no primeiro frame se antes do início
+  if (time <= (float)nodeAnim->mPositionKeys[0].mTime) {
+    const auto &p = nodeAnim->mPositionKeys[0].mValue;
+    return translationMatrix(p.x, p.y, p.z);
+  }
+  // Segurar no último frame se além do fim
+  const unsigned int last = nodeAnim->mNumPositionKeys - 1;
+  if (time >= (float)nodeAnim->mPositionKeys[last].mTime) {
+    const auto &p = nodeAnim->mPositionKeys[last].mValue;
+    return translationMatrix(p.x, p.y, p.z);
+  }
   unsigned int i = 0;
-  for (; i < nodeAnim->mNumPositionKeys - 1; i++) {
+  for (; i < last; i++) {
     if (time < (float)nodeAnim->mPositionKeys[i + 1].mTime) break;
   }
-  float factor = (time - (float)nodeAnim->mPositionKeys[i].mTime) /
-                 (float)(nodeAnim->mPositionKeys[i + 1].mTime - nodeAnim->mPositionKeys[i].mTime);
+  float dt = (float)(nodeAnim->mPositionKeys[i + 1].mTime - nodeAnim->mPositionKeys[i].mTime);
+  float factor = (dt > 0.0f)
+      ? (time - (float)nodeAnim->mPositionKeys[i].mTime) / dt
+      : 0.0f;
   aiVector3D v = nodeAnim->mPositionKeys[i].mValue +
                  factor * (nodeAnim->mPositionKeys[i + 1].mValue - nodeAnim->mPositionKeys[i].mValue);
   return translationMatrix(v.x, v.y, v.z);
@@ -273,12 +286,23 @@ glm::mat4 AnimatedModel::interpolateRotation(float time, const aiNodeAnim *nodeA
         glm::quat(nodeAnim->mRotationKeys[0].mValue.w, nodeAnim->mRotationKeys[0].mValue.x,
                   nodeAnim->mRotationKeys[0].mValue.y, nodeAnim->mRotationKeys[0].mValue.z)));
   }
+  if (time <= (float)nodeAnim->mRotationKeys[0].mTime) {
+    const auto &q0 = nodeAnim->mRotationKeys[0].mValue;
+    return glm::toMat4(glm::normalize(glm::quat(q0.w, q0.x, q0.y, q0.z)));
+  }
+  const unsigned int last = nodeAnim->mNumRotationKeys - 1;
+  if (time >= (float)nodeAnim->mRotationKeys[last].mTime) {
+    const auto &ql = nodeAnim->mRotationKeys[last].mValue;
+    return glm::toMat4(glm::normalize(glm::quat(ql.w, ql.x, ql.y, ql.z)));
+  }
   unsigned int i = 0;
-  for (; i < nodeAnim->mNumRotationKeys - 1; i++) {
+  for (; i < last; i++) {
     if (time < (float)nodeAnim->mRotationKeys[i + 1].mTime) break;
   }
-  float factor = (time - (float)nodeAnim->mRotationKeys[i].mTime) /
-                 (float)(nodeAnim->mRotationKeys[i + 1].mTime - nodeAnim->mRotationKeys[i].mTime);
+  float dt = (float)(nodeAnim->mRotationKeys[i + 1].mTime - nodeAnim->mRotationKeys[i].mTime);
+  float factor = (dt > 0.0f)
+      ? (time - (float)nodeAnim->mRotationKeys[i].mTime) / dt
+      : 0.0f;
   aiQuaternion q;
   aiQuaternion::Interpolate(
       q, nodeAnim->mRotationKeys[i].mValue, nodeAnim->mRotationKeys[i + 1].mValue, factor);
@@ -290,12 +314,23 @@ glm::mat4 AnimatedModel::interpolateScaling(float time, const aiNodeAnim *nodeAn
     const auto &s = nodeAnim->mScalingKeys[0].mValue;
     return scalingMatrix(s.x, s.y, s.z);
   }
+  if (time <= (float)nodeAnim->mScalingKeys[0].mTime) {
+    const auto &s = nodeAnim->mScalingKeys[0].mValue;
+    return scalingMatrix(s.x, s.y, s.z);
+  }
+  const unsigned int last = nodeAnim->mNumScalingKeys - 1;
+  if (time >= (float)nodeAnim->mScalingKeys[last].mTime) {
+    const auto &s = nodeAnim->mScalingKeys[last].mValue;
+    return scalingMatrix(s.x, s.y, s.z);
+  }
   unsigned int i = 0;
-  for (; i < nodeAnim->mNumScalingKeys - 1; i++) {
+  for (; i < last; i++) {
     if (time < (float)nodeAnim->mScalingKeys[i + 1].mTime) break;
   }
-  float factor = (time - (float)nodeAnim->mScalingKeys[i].mTime) /
-                 (float)(nodeAnim->mScalingKeys[i + 1].mTime - nodeAnim->mScalingKeys[i].mTime);
+  float dt = (float)(nodeAnim->mScalingKeys[i + 1].mTime - nodeAnim->mScalingKeys[i].mTime);
+  float factor = (dt > 0.0f)
+      ? (time - (float)nodeAnim->mScalingKeys[i].mTime) / dt
+      : 0.0f;
   aiVector3D v = nodeAnim->mScalingKeys[i].mValue +
                  factor * (nodeAnim->mScalingKeys[i + 1].mValue - nodeAnim->mScalingKeys[i].mValue);
   return scalingMatrix(v.x, v.y, v.z);

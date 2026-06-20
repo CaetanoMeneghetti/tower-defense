@@ -263,6 +263,17 @@ DefenderFireResult updateDefenders(std::vector<GameObject> &defenders,
         if (shoot.shootTimer >= interval) {
           shoot.shootTimer = 0.0f;
           shoot.aiming     = true;
+          // Mirar no zumbi vivo mais próximo antes de animar
+          {
+            float bestDist = 1e9f;
+            for (int ei = 0; ei < (int)enemies.size(); ++ei) {
+              if (!enemies[ei].alive) continue;
+              float dx = enemyTicks[ei].position[0] - unit.position[0];
+              float dz = enemyTicks[ei].position[2] - unit.position[2];
+              float d2 = dx*dx + dz*dz;
+              if (d2 < bestDist) { bestDist = d2; unit.rotationY = -std::atan2(dx, dz); }
+            }
+          }
           unit.setAnimation("command", false);
           const int count = (unit.damage > 0) ? unit.damage : 1;
           result.knightSummoned += count;

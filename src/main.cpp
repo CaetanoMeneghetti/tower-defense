@@ -635,6 +635,16 @@ int run(GLFWwindow *window) {
   knightBase.loadAnimation("knightDeath", "data/models/zombie/zombie_death.glb");
   knightBase.loadAnimation("command",     "data/models/knight/knight_command.glb");
 
+  // Animações de vitória/derrota carregadas em todos os modelos de defensores
+  for (AnimatedModel *m : {
+        &archerBase,   &archerBaseLvl2, &archerBaseLvl3, &archerBaseLvl4, &archerBaseLvl5,
+        &arquebusBase, &arquebusBaseLvl2, &arquebusBaseLvl3, &arquebusBaseLvl4, &arquebusBaseLvl5,
+        &cannonerBase, &cannonerBase2,  &cannonerBase3,  &cannonerBase4,  &cannonerBase5,
+        &knightBase}) {
+    m->loadAnimation("defeat",   "data/models/misc/defeat.glb");
+    m->loadAnimation("victory1", "data/models/misc/victory1.glb");
+    m->loadAnimation("victory2", "data/models/misc/victory2.glb");
+  }
 
   renderLoadingFrame(window, "Carregando cenario...", 0.70f);
 
@@ -981,6 +991,11 @@ Mesh shield3Mesh(shield3Vertices.empty() ? shield2Vertices.empty() ? shieldVerti
   using namespace game_constants;
   renderLoadingFrame(window, "Iniciando...", 1.0f);
 
+  enum class GameResult { None, Defeat, Victory };
+  GameResult gameResult = GameResult::None;
+  float endCountdown   = 30.0f;
+  bool  endAnimSet     = false;
+
   double lastTime = glfwGetTime();
   while (!glfwWindowShouldClose(window)) {
     double currentTime = glfwGetTime();
@@ -1108,7 +1123,31 @@ Mesh shield3Mesh(shield3Vertices.empty() ? shield2Vertices.empty() ? shieldVerti
       } else if (waveState.phase == WavePhase::Victory) {
         audio::stopMusic();
         audio::stopIntermissionMusic();
+        if (gameResult == GameResult::None) {
+          gameResult = GameResult::Victory;
+          audio::playMusic("data/audio/victory.mp3", 0.8f);
+        }
       }
+    }
+
+    // ------- FIM DE JOGO: derrota -------
+    if (gameResult == GameResult::None && state.health <= 0) {
+      gameResult = GameResult::Defeat;
+      audio::stopMusic();
+      audio::stopIntermissionMusic();
+      audio::playMusic("data/audio/defeat.mp3", 0.8f);
+    }
+
+    // ------- FIM DE JOGO: forçar animações nos defensores (uma vez) -------
+    if (gameResult != GameResult::None && !endAnimSet) {
+      for (auto &d : defenders) {
+        if (gameResult == GameResult::Defeat) {
+          d.setAnimation("defeat", false);
+        } else {
+          d.setAnimation("victory2", true);
+        }
+      }
+      endAnimSet = true;
     }
 
     // ------- UPDATE: defensores -------
@@ -1483,6 +1522,26 @@ Mesh shield3Mesh(shield3Vertices.empty() ? shield2Vertices.empty() ? shieldVerti
 
     gameHud.render(state, waveState, currentFps);
 
+    // ------- DEBUG: matar todos os zumbis e dar ouro -------
+    if (state.debugSkipWave) {
+      state.gold += 999;
+      for (int i = 0; i < kMaxEnemies; ++i) {
+        if (enemies[i].alive) {
+          enemies[i].alive        = false;
+          enemies[i].hp           = 0;
+          enemies[i].respawnTimer = game_constants::kEnemyRespawnDelay;
+        }
+      }
+      state.debugSkipWave = false;
+    }
+    if (state.debugForceVictory && gameResult == GameResult::None) {
+      gameResult = GameResult::Victory;
+      audio::stopMusic();
+      audio::stopIntermissionMusic();
+      audio::playMusic("data/audio/victory.mp3", 0.8f);
+      state.debugForceVictory = false;
+    }
+
     // Canvas overlay + janela de resultado da classificação (se houver).
     spell::render(spellMode, state);
 
@@ -1584,6 +1643,58 @@ Mesh shield3Mesh(shield3Vertices.empty() ? shield2Vertices.empty() ? shieldVerti
           showed = true;
         }
       }
+    }
+
+    // ------- OVERLAY DE FIM DE JOGO -------
+    if (gameResult != GameResult::None) {
+      endCountdown -= deltaTime;
+      if (endCountdown < 0.0f) endCountdown = 0.0f;
+
+      const bool pressedY = glfwGetKey(window, GLFW_KEY_Y) == GLFW_PRESS;
+      if (pressedY || endCountdown <= 0.0f) {
+        glfwSetWindowShouldClose(window, GLFW_TRUE);
+      }
+
+      const float fw = static_cast<float>(state.fbWidth);
+      const float fh = static_cast<float>(state.fbHeight);
+      const float bandH = 160.0f;
+      const float bandY = (fh - bandH) * 0.5f;
+
+      ImGui::SetNextWindowPos(ImVec2(0.0f, bandY), ImGuiCond_Always);
+      ImGui::SetNextWindowSize(ImVec2(fw, bandH), ImGuiCond_Always);
+      ImGui::SetNextWindowBgAlpha(0.62f);
+      ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.12f, 0.12f, 0.12f, 1.0f));
+      ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+      ImGui::Begin("##endgame", nullptr,
+                   ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                   ImGuiWindowFlags_NoMove     | ImGuiWindowFlags_NoScrollbar |
+                   ImGuiWindowFlags_NoInputs   | ImGuiWindowFlags_NoNav);
+
+      const bool isVictory = (gameResult == GameResult::Victory);
+      const char *mainText = isVictory ? "VITO\xcc\x81RIA!" : "DERROTA!";
+      const ImVec4 mainColor = isVictory
+          ? ImVec4(1.0f, 0.85f, 0.1f, 1.0f)
+          : ImVec4(0.85f, 0.12f, 0.12f, 1.0f);
+
+      ImGui::SetWindowFontScale(3.2f);
+      const ImVec2 textSize = ImGui::CalcTextSize(mainText);
+      ImGui::SetCursorPosX((fw - textSize.x) * 0.5f);
+      ImGui::SetCursorPosY((bandH - textSize.y) * 0.5f - 18.0f);
+      ImGui::TextColored(mainColor, "%s", mainText);
+
+      ImGui::SetWindowFontScale(1.0f);
+      const int secs = static_cast<int>(std::ceil(endCountdown));
+      char subText[96];
+      std::snprintf(subText, sizeof(subText),
+                    "Voltando ao menu em %d segundo%s... (pressione Y para retornar)",
+                    secs, secs == 1 ? "" : "s");
+      const ImVec2 subSize = ImGui::CalcTextSize(subText);
+      ImGui::SetCursorPosX((fw - subSize.x) * 0.5f);
+      ImGui::TextColored(ImVec4(0.78f, 0.78f, 0.78f, 1.0f), "%s", subText);
+
+      ImGui::End();
+      ImGui::PopStyleColor();
+      ImGui::PopStyleVar();
     }
 
     ImGui::Render();

@@ -51,7 +51,7 @@ class Hud {
   void renderWaveBar(const AppState &state, const WaveState &ws);
   void renderIntermissionOverlay(const WaveState &ws);
   void renderVictoryOverlay();
-  void renderDebugWindow(const AppState &state, float fps);
+  void renderDebugWindow(AppState &state, float fps);
 
   HudTextures textures_;
 };

@@ -73,4 +73,8 @@ struct AppState {
   // ---- Tamanho do framebuffer ----
   int fbWidth = render_constants::kWindowWidth;
   int fbHeight = render_constants::kWindowHeight;
+
+  // ---- Debug ----
+  bool debugSkipWave    = false;
+  bool debugForceVictory = false;
 };

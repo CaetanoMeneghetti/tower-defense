@@ -733,7 +733,7 @@ void Hud::renderVictoryOverlay() {
 // ---------------------------------------------------------------------------
 // Debug
 // ---------------------------------------------------------------------------
-void Hud::renderDebugWindow(const AppState &state, float fps) {
+void Hud::renderDebugWindow(AppState &state, float fps) {
   ImGuiWindowFlags flags =
       ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings |
       ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoMove;
@@ -755,6 +755,18 @@ void Hud::renderDebugWindow(const AppState &state, float fps) {
     }
     ImGui::Spacing();
     ImGui::TextColored(kColorMuted, "Curva [T]: %s", state.showCurve ? "ON" : "OFF");
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.55f, 0.20f, 0.20f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.70f, 0.25f, 0.25f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.80f, 0.30f, 0.30f, 1.0f));
+    if (ImGui::Button("Matar zumbis  +999g")) state.debugSkipWave = true;
+    ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.15f, 0.40f, 0.55f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.20f, 0.52f, 0.70f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.25f, 0.60f, 0.80f, 1.0f));
+    if (ImGui::Button("Forcar Vitoria")) state.debugForceVictory = true;
+    ImGui::PopStyleColor(3);
+    ImGui::PopStyleColor(3);
   }
   ImGui::End();
 }
