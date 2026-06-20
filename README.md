@@ -1,6 +1,6 @@
 # Computação Gráfica e Visualização I (INF01047) - INF/UFRGS
 
-![Banner do Projeto](Spec/gitbanner.png)
+![Banner do Projeto](Spec/gitbannerfinal.png)
 
 # 1348AD: IRON & BLOOD
 
