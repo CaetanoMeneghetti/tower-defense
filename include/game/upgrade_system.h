@@ -28,4 +28,6 @@ UpgradeData calculateUpgrade(int troopType, int currentLevel);
 
 // Desenha a janela de detalhes da tropa selecionada. Retorna true se o usuário
 // clicou no botão de UPGRADE — main aplica a transição com troop.upgrade().
-bool drawTroopDetailsHud(GameObject &troop, AppState &state, unsigned int placeholderIcon);
+// currentIcon = ícone do nível atual; nextIcon = ícone do próximo nível (0 se max).
+bool drawTroopDetailsHud(GameObject &troop, AppState &state,
+                         unsigned int currentIcon, unsigned int nextIcon);

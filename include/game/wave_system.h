@@ -52,7 +52,8 @@ WaveState makeWaveState();
 
 // Atualiza timers e transições de fase. Chame uma vez por frame.
 // `deathsThisFrame` = quantos inimigos morreram ou chegaram ao castelo neste frame.
+// `aliveCount`      = total de inimigos vivos (incluindo os invocados pelo necromante).
 // `allSlotsFull`    = true se não há nenhum slot livre para spawnar.
 // Retorna o tipo a spawnar (enemy_types::kNormal ou kArmored), ou -1 para não spawnar.
 int updateWave(WaveState &ws, GLFWwindow *window, float deltaTime,
-               int deathsThisFrame, bool allSlotsFull);
+               int deathsThisFrame, int aliveCount, bool allSlotsFull);

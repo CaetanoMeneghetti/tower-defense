@@ -84,9 +84,9 @@ constexpr int kKnightCost   = 250;
 constexpr float kSpellSlowMultiplier = 0.75f;  // quadrado: anda a 75% da velocidade
 constexpr float kSpellPoisonFraction = 0.10f;  // círculo: 10% da vida máx por segundo
 constexpr float kSpellPoisonDuration = 8.0f;   // círculo: duração do veneno (s)
-constexpr int   kSpellCircleCost     = 90;     // veneno
-constexpr int   kSpellSquareCost     = 60;     // lentidão
-constexpr int   kSpellTriangleCost   = 120;    // metade da vida
+constexpr int   kSpellCircleCost     = 300;     // veneno
+constexpr int   kSpellSquareCost     = 150;     // lentidão
+constexpr int   kSpellTriangleCost   = 500;    // metade da vida
 // Tempo que a forma perfeita fica visível na tela após o lançamento (fade-out).
 constexpr float kSpellVisualDuration = 1.2f;
 

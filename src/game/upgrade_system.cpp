@@ -12,7 +12,7 @@ const UpgradeEntry kArcher[4] = {
     {50,  12, 18.0f, 1.8f, "Nivel 2: Flechas de Ponta Larga\nAumenta levemente o dano base e o alcance."},
     {100, 14, 18.0f, 1.35f, "Nivel 3: Treinamento de Cadencia\nOs arqueiros disparam consideravelmente mais rapido. Excelente contra hordas."},
     {150, 22, 24.0f, 1.35f, "Nivel 4: Arcos de Madeira Composta\nEquipamento superior que garante projeteis mais rapidos e dano letal."},
-    {200, 28, 28.0f, 0.85f, "Nivel 5: Mestres Arqueiros\nTreinamento de elite diminui o tempo entre disparos e"},
+    {200, 30, 28.0f, 0.85f, "Nivel 5: Mestres Arqueiros\nTreinamento de elite diminui o tempo entre disparos e aumenta o dano"},
 };
 const UpgradeEntry kArquebus[4] = {
     {100,  25, 16.0f, 1.8f, "Nivel 2: Polvora Refinada\nReduz os detritos no cano, aumentando ligeiramente a cadencia de disparo."},
@@ -47,7 +47,8 @@ UpgradeData calculateUpgrade(int troopType, int currentLevel) {
   return {e.cost, e.dmg, e.range, e.fireRate, e.desc};
 }
 
-bool drawTroopDetailsHud(GameObject &troop, AppState &state, unsigned int placeholderIcon) {
+bool drawTroopDetailsHud(GameObject &troop, AppState &state,
+                         unsigned int currentIcon, unsigned int nextIcon) {
   bool didUpgrade = false;
 
   const ImVec2 windowSize(450, 420);
@@ -60,8 +61,8 @@ bool drawTroopDetailsHud(GameObject &troop, AppState &state, unsigned int placeh
                ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize |
                    ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoTitleBar);
 
-  ImGui::Image((void *)(intptr_t)placeholderIcon, ImVec2(70, 70));
-  ImGui::SameLine();
+  ImGui::Image((void *)(intptr_t)currentIcon, ImVec2(60, 60));
+  ImGui::SameLine(0, 12);
 
   ImGui::BeginGroup();
   const char *troopName = (troop.type == 1) ? "Arqueiro"
@@ -143,7 +144,7 @@ bool drawTroopDetailsHud(GameObject &troop, AppState &state, unsigned int placeh
     const bool canUpgrade = (state.gold >= up.cost);
     if (!canUpgrade) ImGui::BeginDisabled();
 
-    ImGui::Image((void *)(intptr_t)placeholderIcon, ImVec2(50, 50));
+    if (nextIcon != 0) ImGui::Image((void *)(intptr_t)nextIcon, ImVec2(50, 50));
     ImGui::SameLine();
 
     char btnText[64];

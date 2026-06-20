@@ -619,7 +619,7 @@ void Hud::renderIntermissionOverlay(const WaveState &ws) {
     int entryCount = 0;
     if (normalCount   > 0) entries[entryCount++] = { textures_.zombiePortrait,        "Zumbi",       normalCount,       def.enemyStats.maxHp,  def.enemyStats.speed,  def.enemyStats.damage };
     if (def.armoredCount > 0) entries[entryCount++] = { textures_.armoredZombiePortrait, "Blindado",    def.armoredCount,  def.armoredStats.maxHp, def.armoredStats.speed, def.armoredStats.damage };
-    if (def.chargerCount > 0) entries[entryCount++] = { textures_.chargerPortrait,       "Charger",     def.chargerCount,  def.chargerStats.maxHp, def.chargerStats.speed, def.chargerStats.damage };
+    if (def.chargerCount > 0) entries[entryCount++] = { textures_.chargerPortrait,       "Corredor",    def.chargerCount,  def.chargerStats.maxHp, def.chargerStats.speed, def.chargerStats.damage };
     if (def.necroCount   > 0) entries[entryCount++] = { textures_.necromancerPortrait,   "Necromante",  def.necroCount,    def.necroStats.maxHp,   def.necroStats.speed,   def.necroStats.damage };
 
     const float iconSz   = 40.0f;

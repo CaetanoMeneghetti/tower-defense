@@ -53,6 +53,11 @@ class AnimatedModel {
   std::vector<glm::mat4> getTransformsAtTime(const std::string &animName, float timeInSeconds,
                                              bool loop = true);
   void draw(unsigned int shaderId);
+  // Instanced rendering: liga o VBO de matrizes de instância ao VAO existente
+  // (locations 7-10) e registra o divisor. Chamar uma vez após o build do campo.
+  void setupInstanceBuffer(unsigned int instanceVBO);
+  void setupNormalBuffer(unsigned int normalVBO);
+  void drawInstanced(int instanceCount);
 
  private:
   void loadModel(const std::string &path);

@@ -11,16 +11,12 @@
 // GRAMA COM BALANÇO PROCEDURAL — completamente isolado do resto do render
 // =============================================================================
 
-struct GrassInstance {
-  glm::vec3 position;
-  float     rotationY = 0.0f;
-  float     scale     = 1.0f;
-};
-
 struct GrassField {
-  std::vector<GrassInstance> instances;
-  GLuint shader  = 0;
-  GLuint texture = 0;
+  GLuint shader        = 0;
+  GLuint texture       = 0;
+  GLuint instanceVBO   = 0;
+  GLuint normalVBO     = 0;
+  int    instanceCount = 0;
 };
 
 // Gera instâncias de grama evitando o caminho real (curvePoints).

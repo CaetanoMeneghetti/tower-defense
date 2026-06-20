@@ -4,8 +4,10 @@ layout(location = 0) in vec3 position;
 layout(location = 1) in vec3 normal;
 layout(location = 2) in vec2 texCoords;
 // locations 3-6 (tangent/bitangent/boneIDs/boneWeights) existem no VAO mas são ignoradas aqui
+// locations 7-10: mat4 de instância; 11-13: mat3 normal pré-computada (sem inverse no shader)
+layout(location = 7)  in mat4 instanceModel;
+layout(location = 11) in mat3 instanceNormal;
 
-uniform mat4  model;
 uniform mat4  view;
 uniform mat4  projection;
 uniform float time;
@@ -15,7 +17,7 @@ out vec3 vFragPos;
 out vec3 vNormal;
 
 void main() {
-    vec4 worldPos = model * vec4(position, 1.0);
+    vec4 worldPos = instanceModel * vec4(position, 1.0);
 
     // Balanço procedural: vértices mais altos balançam mais (base ancorada em Y=0)
     float h    = max(position.y, 0.0);
@@ -25,7 +27,7 @@ void main() {
     worldPos.z += swayZ;
 
     vFragPos   = worldPos.xyz;
-    vNormal    = mat3(transpose(inverse(model))) * normal;
+    vNormal    = instanceNormal * normal;
     vTexCoords = texCoords;
 
     gl_Position = projection * view * worldPos;

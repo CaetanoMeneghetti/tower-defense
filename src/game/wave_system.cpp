@@ -53,7 +53,7 @@ static int pickSpawnType(int i, const WaveDef &def) {
 }
 
 int updateWave(WaveState &ws, GLFWwindow *window, float deltaTime,
-               int deathsThisFrame, bool allSlotsFull) {
+               int deathsThisFrame, int aliveCount, bool allSlotsFull) {
   if (ws.phase == WavePhase::Victory) return -1;
 
   bool yDown        = glfwGetKey(window, GLFW_KEY_Y) == GLFW_PRESS;
@@ -87,7 +87,7 @@ int updateWave(WaveState &ws, GLFWwindow *window, float deltaTime,
 
   ws.killedCount += deathsThisFrame;
 
-  if (ws.spawnedCount >= def.enemyCount && ws.killedCount >= def.enemyCount) {
+  if (ws.spawnedCount >= def.enemyCount && aliveCount == 0) {
     int next = ws.currentWave + 1;
     if (next >= 10) {
       ws.phase = WavePhase::Victory;

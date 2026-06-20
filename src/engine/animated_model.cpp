@@ -306,6 +306,39 @@ void AnimatedModel::draw(unsigned int /*shaderId*/) {
   glDrawElements(GL_TRIANGLES, indices_.size(), GL_UNSIGNED_INT, 0);
 }
 
+void AnimatedModel::setupInstanceBuffer(GLuint instanceVBO) {
+  glBindVertexArray(vao_);
+  glBindBuffer(GL_ARRAY_BUFFER, instanceVBO);
+  for (int i = 0; i < 4; ++i) {
+    glEnableVertexAttribArray(7 + i);
+    glVertexAttribPointer(7 + i, 4, GL_FLOAT, GL_FALSE,
+                          sizeof(glm::mat4),
+                          (void*)(i * sizeof(glm::vec4)));
+    glVertexAttribDivisor(7 + i, 1);
+  }
+  glBindVertexArray(0);
+}
+
+void AnimatedModel::setupNormalBuffer(unsigned int normalVBO) {
+  glBindVertexArray(vao_);
+  glBindBuffer(GL_ARRAY_BUFFER, normalVBO);
+  for (int i = 0; i < 3; ++i) {
+    glEnableVertexAttribArray(11 + i);
+    glVertexAttribPointer(11 + i, 3, GL_FLOAT, GL_FALSE,
+                          sizeof(glm::mat3),
+                          (void*)(i * sizeof(glm::vec3)));
+    glVertexAttribDivisor(11 + i, 1);
+  }
+  glBindVertexArray(0);
+}
+
+void AnimatedModel::drawInstanced(int instanceCount) {
+  glBindVertexArray(vao_);
+  glDrawElementsInstanced(GL_TRIANGLES, (GLsizei)indices_.size(),
+                          GL_UNSIGNED_INT, 0, instanceCount);
+  glBindVertexArray(0);
+}
+
 glm::mat4 AnimatedModel::convertMatrixToGlmFormat(const aiMatrix4x4 &from) {
   glm::mat4 to;
   to[0][0] = from.a1; to[1][0] = from.a2; to[2][0] = from.a3; to[3][0] = from.a4;

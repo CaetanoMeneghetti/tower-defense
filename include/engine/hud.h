@@ -21,6 +21,10 @@ struct HudTextures {
   unsigned int armoredZombiePortrait;
   unsigned int chargerPortrait;
   unsigned int necromancerPortrait;
+  unsigned int archerUpIcon[4];    // índice 0=nível 1 … 3=nível 4
+  unsigned int arcabuzUpIcon[4];
+  unsigned int cannonUpIcon[4];
+  unsigned int commanderUpIcon[4];
 };
 
 class Hud {

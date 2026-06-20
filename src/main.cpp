@@ -239,6 +239,8 @@ struct SceneTextures {
 
   unsigned int selectionCircle;
   unsigned int armoredZombieColor;
+  unsigned int chargerColor;
+  unsigned int necromancerColor;
 
   unsigned int cannonerColor;
   unsigned int cannonerNormal;
@@ -294,6 +296,8 @@ SceneTextures loadAllSceneTextures() {
 
   t.selectionCircle    = loadTexture("data/textures/selection_circle.png", 4);
   t.armoredZombieColor = loadTexture("data/textures/armor_zombie.png", 4);
+  t.chargerColor       = loadTexture("data/textures/charger.png");
+  t.necromancerColor   = loadTexture("data/textures/necromancer.png");
 
   t.cannonerColor      = loadTexture("data/textures/cannoner.png");
   t.cannonerNormal     = loadTexture("data/textures/cannoner_normal.png");
@@ -504,8 +508,24 @@ int run(GLFWwindow *window) {
   uiTextures.knightIcon     = loadTexture("data/textures/ui_knight.png", 4);
   uiTextures.zombiePortrait         = loadTexture("data/textures/ui_zombie.png", 4);
   uiTextures.armoredZombiePortrait  = loadTexture("data/textures/ui_armoredzombie.png", 4);
-  uiTextures.chargerPortrait        = loadTexture("data/textures/ui_zombie.png", 4);
-  uiTextures.necromancerPortrait    = loadTexture("data/textures/ui_zombie.png", 4);
+  uiTextures.chargerPortrait        = loadTexture("data/textures/ui_corredor.png", 4);
+  uiTextures.necromancerPortrait    = loadTexture("data/textures/ui_necromancer.png", 4);
+  uiTextures.archerUpIcon[0]   = loadTexture("data/textures/archerup1.png", 4);
+  uiTextures.archerUpIcon[1]   = loadTexture("data/textures/archerup2.png", 4);
+  uiTextures.archerUpIcon[2]   = loadTexture("data/textures/archerup3.png", 4);
+  uiTextures.archerUpIcon[3]   = loadTexture("data/textures/archerup4.png", 4);
+  uiTextures.arcabuzUpIcon[0]  = loadTexture("data/textures/arcabuzup1.png", 4);
+  uiTextures.arcabuzUpIcon[1]  = loadTexture("data/textures/arcabuzup2.png", 4);
+  uiTextures.arcabuzUpIcon[2]  = loadTexture("data/textures/arcabuzup3.png", 4);
+  uiTextures.arcabuzUpIcon[3]  = loadTexture("data/textures/arcabuzup4.png", 4);
+  uiTextures.cannonUpIcon[0]   = loadTexture("data/textures/cannonup1.png", 4);
+  uiTextures.cannonUpIcon[1]   = loadTexture("data/textures/cannonup2.png", 4);
+  uiTextures.cannonUpIcon[2]   = loadTexture("data/textures/cannonup3.png", 4);
+  uiTextures.cannonUpIcon[3]   = loadTexture("data/textures/cannonup4.png", 4);
+  uiTextures.commanderUpIcon[0]= loadTexture("data/textures/commanderup1.png", 4);
+  uiTextures.commanderUpIcon[1]= loadTexture("data/textures/commanderup2.png", 4);
+  uiTextures.commanderUpIcon[2]= loadTexture("data/textures/commanderup3.png", 4);
+  uiTextures.commanderUpIcon[3]= loadTexture("data/textures/commanderup4.png", 4);
   gameHud.setTextures(uiTextures);
 
   // ---------------------------------------------------------------------------
@@ -787,9 +807,11 @@ Mesh shield3Mesh(shield3Vertices.empty() ? shield2Vertices.empty() ? shieldVerti
     grassField = buildGrassField(
         pipe.grassSwayShader, tex.grass.color,
         curvePoints,
-        /*pathClearance=*/4.5f,
-        /*areaHalfX=*/28.0f, /*areaHalfZ=*/18.0f,
-        /*spacing=*/0.4f, /*baseScale=*/0.55f);
+        /*pathClearance=*/2.2f,
+        /*areaHalfX=*/32.0f, /*areaHalfZ=*/22.0f,
+        /*spacing=*/0.55f, /*baseScale=*/0.55f);
+    grassInstanceModel->setupInstanceBuffer(grassField.instanceVBO);
+    grassInstanceModel->setupNormalBuffer(grassField.normalVBO);
   }
 
   std::vector<TreeInstance> trees = placeTrees(curvePoints);
@@ -1003,11 +1025,14 @@ Mesh shield3Mesh(shield3Vertices.empty() ? shield2Vertices.empty() ? shieldVerti
 
     // ------- UPDATE: wave system -------
     bool allSlotsFull = true;
-    for (auto &e : enemies)
-      if (!e.alive && e.respawnTimer <= 0.0f) { allSlotsFull = false; break; }
+    int aliveCount = 0;
+    for (auto &e : enemies) {
+      if (!e.alive && e.respawnTimer <= 0.0f) allSlotsFull = false;
+      if (e.alive) ++aliveCount;
+    }
 
     WavePhase prevPhase = waveState.phase;
-    int spawnType = updateWave(waveState, window, deltaTime, deathsThisFrame, allSlotsFull);
+    int spawnType = updateWave(waveState, window, deltaTime, deathsThisFrame, aliveCount, allSlotsFull);
 
     // Helper: coloca um inimigo num slot livre e retorna true se achou slot.
     auto spawnEnemy = [&](const EnemyStats &stats, float atDist = 0.0f) -> bool {
@@ -1241,9 +1266,9 @@ Mesh shield3Mesh(shield3Vertices.empty() ? shield2Vertices.empty() ? shieldVerti
         case enemy_types::kArmored:
           model = &armoredEnemyModels[i]; eTex = tex.armoredZombieColor; break;
         case enemy_types::kCharger:
-          model = &chargerModels[i]; break;
+          model = &chargerModels[i]; eTex = tex.chargerColor; break;
         case enemy_types::kNecromancer:
-          model = &necromancerModels[i]; break;
+          model = &necromancerModels[i]; eTex = tex.necromancerColor; break;
         default:
           model = &normalEnemyModels[i]; break;
       }
@@ -1463,7 +1488,21 @@ Mesh shield3Mesh(shield3Vertices.empty() ? shield2Vertices.empty() ? shieldVerti
 
     if (selectedTroopIndex >= 0 && selectedTroopIndex < static_cast<int>(defenders.size())) {
       GameObject &troop = defenders[selectedTroopIndex];
-      if (drawTroopDetailsHud(troop, state, uiTextures.archerIcon)) {
+      // Seleciona par de ícones: atual e preview do próximo nível
+      // archerup1 = aparência após 1º upgrade (nível 2), arquerup2 = nível 3, etc.
+      // Nível 1 → icon base da tropa; nível N≥2 → upIcon[N-2]
+      const unsigned int *upIcons = nullptr;
+      unsigned int baseIcon = uiTextures.archerIcon;
+      if      (troop.type == 1) { upIcons = uiTextures.archerUpIcon;    baseIcon = uiTextures.archerIcon;   }
+      else if (troop.type == 2) { upIcons = uiTextures.arcabuzUpIcon;   baseIcon = uiTextures.arquebusIcon; }
+      else if (troop.type == 3) { upIcons = uiTextures.commanderUpIcon; baseIcon = uiTextures.knightIcon;   }
+      else if (troop.type == 4) { upIcons = uiTextures.cannonUpIcon;    baseIcon = uiTextures.cannonIcon;   }
+      unsigned int curIcon = (troop.level <= 1 || !upIcons)
+                               ? baseIcon
+                               : upIcons[std::min(troop.level - 2, 3)];
+      unsigned int nxtIcon = (troop.level < kMaxTroopLevel && upIcons)
+                               ? upIcons[std::min(troop.level - 1, 3)] : 0;
+      if (drawTroopDetailsHud(troop, state, curIcon, nxtIcon)) {
         troop.upgrade();
         audio::playOneShot("data/audio/selection_sound.mp3");
       }
