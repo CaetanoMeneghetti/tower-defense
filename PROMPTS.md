@@ -148,6 +148,24 @@ Resultado: Funções `init`, `update` e `render` em *spell_mode.cpp*. `update` g
 
 ---
 
+**PROMPT**: Implemente GPU instancing para a grama: reduza N draw calls para 1 glDrawElementsInstanced. Cada instância recebe uma mat4 de modelo via vertex attrib divisor (locations 3-6) e uma mat3 de normal pré-computada (locations 7-9) para eliminar o inverse() por vértice no shader. O vertex shader deve aplicar balanço procedural proporcional à altura do vértice (base ancorada em Y=0).
+
+Resultado: Struct GrassField com instanceVBO e normalVBO. buildGrassField gera as matrizes no CPU com jitter e falloff radial suave (smoothstep) a partir do centro do mapa, evitando borda quadrada. O grass_sway.vert lê instanceModel (mat4, loc 3-6) e instanceNormal (mat3, loc 7-9) como atributos instanciados; o balanço usa sin(time + worldPos.x/z) escalado por max(position.y, 0.0). Troca de GL_BLEND para discard no fragment shader restaurou o early-z culling.
+
+---
+
+**PROMPT**: Tela de vitória/derrota: se vida chegar a 0, exibe 'DERROTA!' com faixa cinza semitransparente; se vencer, exibe 'VITÓRIA!'. Force todos os defensores a tocarem a animação de defeat ou victory2 (em loop). Toque a música correspondente via miniaudio. Mostre countdown 'Voltando ao menu em 30 segundos... (aperte Y para retornar)' e feche com glfwSetWindowShouldClose ao fim.
+
+Resultado: Enum GameResult com None/Defeat/Victory. Derrota detectada quando state.health <= 0; vitória na transição de fase Victory do wave system. Overlay ImGui com SetWindowFontScale(3.2f), cor dourada/vermelha e alpha 0.62. Cada defensor recebe setAnimation("victory2", true) ou setAnimation("defeat", false). Countdown com glfwSetWindowShouldClose ao zerar ou ao pressionar Y.
+
+---
+
+**PROMPT**: Corrija o bug do arcabuz onde o braço some ao terminar a animação de recarga. A animação de reload é tocada ao contrário (animationTime decrementa até 0). O interpolador de ossos lê keys[i+1] fora dos limites quando time >= último keyframe, e produz fator negativo quando time < mTime do primeiro keyframe.
+
+Resultado: Guards de boundary nos três interpoladores (translação, rotação, escala) de animated_model.cpp: clamp para o primeiro keyframe quando time <= mPositionKeys[0].mTime, clamp para o último quando time >= mPositionKeys[last].mTime. Divisor protegido contra dt=0 com fator=0.
+
+---
+
 **PROMPT**: Use cache para otimizar getTransformsAtTime, renderTrees e os glGetUniformLocation.
 
 Resultado: Praticamente todas as mudanças desse commit.
