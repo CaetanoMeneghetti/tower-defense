@@ -39,7 +39,7 @@ constexpr int kMaxTreeAttempts = kTreeCount * 40;
 // kTreeFalloffRadius. Como a névoa começa em kFogStart = 60, árvores além disso
 // já ficam encobertas; cortar cedo (zero além de 66) elimina muitas instâncias
 // distantes e prioriza o FPS, com perda visual mínima. Valores em unidades de mundo.
-constexpr float kTreeFullDensityRadius = 30.0f;
+constexpr float kTreeFullDensityRadius = 22.0f;
 constexpr float kTreeFalloffRadius     = 66.0f;
 
 // ---- Lanternas ----

@@ -29,14 +29,13 @@ GrassField buildGrassField(GLuint shader, GLuint texture,
   const int stepsX = static_cast<int>(areaHalfX / spacing);
   const int stepsZ = static_cast<int>(areaHalfZ / spacing);
 
-  // Densidade da grama cai com a distância ao centro do mapa (0,0): cheia só no
-  // núcleo (24% do raio máximo) e decai de forma QUADRÁTICA até zero no canto mais
-  // distante. O decaimento quadrático mantém o núcleo denso igual ao de antes mas
-  // deixa a borda bem esparsa, então a grama alcança bem mais longe sem explodir a
-  // contagem de instâncias (instancing desenha todas) — preservando o FPS.
-  const float maxRadius  = std::sqrt(areaHalfX * areaHalfX + areaHalfZ * areaHalfZ);
-  const float fullRadius = maxRadius * 0.24f;
-  const float fallSpan   = maxRadius - fullRadius;
+  // Decaimento RADIAL e CONTÍNUO a partir do centro do mapa (0,0): densidade cheia
+  // só num núcleo e some suavemente (smoothstep) até zero no raio INSCRITO na área
+  // (a menor meia-dimensão). Como o zero é atingido antes da borda do retângulo, a
+  // grama vira um círculo que se dissolve — sem a borda dura/quadrada de antes.
+  const float falloffRadius = (areaHalfX < areaHalfZ) ? areaHalfX : areaHalfZ;
+  const float fullRadius    = falloffRadius * 0.40f;
+  const float fallSpan      = falloffRadius - fullRadius;
 
   std::vector<glm::mat4> matrices;
   std::vector<glm::mat3> normalMatrices;
@@ -49,13 +48,13 @@ GrassField buildGrassField(GLuint shader, GLuint texture,
       float z = j * spacing + jitterDist(rng);
       if (distanceToPath(curvePoints, x, z) < pathClearance) continue;
 
-      // Redução gradual de densidade conforme se afasta do centro do mapa.
-      // Queda quadrática: linear² faz a borda decair mais rápido que o núcleo.
+      // Densidade decai suavemente do centro até zero no raio de falloff (smoothstep).
       const float radius = std::sqrt(x * x + z * z);
       float keepProb = 1.0f;
       if (radius > fullRadius) {
-        const float linear = 1.0f - (radius - fullRadius) / fallSpan;
-        keepProb = linear > 0.0f ? linear * linear : 0.0f;
+        float t = (radius - fullRadius) / fallSpan;      // 0 no núcleo → 1 no falloff
+        t = t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
+        keepProb = 1.0f - t * t * (3.0f - 2.0f * t);     // smoothstep invertido: 1→0 suave
       }
       if (keepProb <= 0.0f || keepDist(rng) > keepProb) continue;
 

@@ -32,12 +32,17 @@ std::vector<TreeInstance> placeTrees(const std::vector<Point> &curvePoints) {
     const float x = posDist(rng);
     const float z = posDist(rng);
 
-    // Redução gradual de densidade conforme se afasta do centro do mapa (0,0).
-    // keepProb: 1 até o raio cheio, decai linearmente até 0 no raio de falloff.
+    // Decaimento RADIAL e CONTÍNUO a partir do centro (0,0): cheia no núcleo e some
+    // suavemente (smoothstep) até zero no raio de falloff. Como os candidatos só são
+    // gerados em [-falloff, falloff] e keepProb=0 além do raio, as árvores formam um
+    // círculo que se dissolve — sem quadrado e sem corte duro na borda.
     const float radius = std::sqrt(x * x + z * z);
-    const float keepProb = (radius <= kTreeFullDensityRadius)
-                               ? 1.0f
-                               : 1.0f - (radius - kTreeFullDensityRadius) / falloffSpan;
+    float keepProb = 1.0f;
+    if (radius > kTreeFullDensityRadius) {
+      float t = (radius - kTreeFullDensityRadius) / falloffSpan;  // 0 no núcleo → 1 no falloff
+      t = t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
+      keepProb = 1.0f - t * t * (3.0f - 2.0f * t);                // smoothstep invertido: 1→0
+    }
     if (keepProb <= 0.0f || keepDist(rng) > keepProb) {
       continue;
     }

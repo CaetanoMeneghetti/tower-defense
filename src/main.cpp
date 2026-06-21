@@ -818,8 +818,13 @@ Mesh shield3Mesh(shield3Vertices.empty() ? shield2Vertices.empty() ? shieldVerti
         pipe.grassSwayShader, tex.grass.color,
         curvePoints,
         /*pathClearance=*/2.2f,
-        /*areaHalfX=*/58.0f, /*areaHalfZ=*/44.0f,
-        /*spacing=*/0.55f, /*baseScale=*/0.55f);
+        // Área QUADRADA: o decaimento radial (em buildGrassField) dissolve a grama
+        // num círculo de raio = a meia-dimensão, então não há borda quadrada visível.
+        // A grama tem 3138 tris/instância, então o custo é dominado pela QUANTIDADE
+        // de instâncias — touceiras maiores (scale) e mais espaçadas (spacing) cobrem
+        // a área com menos instâncias. Ajuste fino: menor spacing = mais densa/pesada.
+        /*areaHalfX=*/54.0f, /*areaHalfZ=*/54.0f,
+        /*spacing=*/0.85f, /*baseScale=*/0.75f);
     grassInstanceModel->setupInstanceBuffer(grassField.instanceVBO);
     grassInstanceModel->setupNormalBuffer(grassField.normalVBO);
   }
