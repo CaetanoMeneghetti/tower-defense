@@ -507,7 +507,7 @@ int run(GLFWwindow *window) {
   uiTextures.cannonIcon     = loadTexture("data/textures/ui_cannoner.png", 4);
   uiTextures.knightIcon     = loadTexture("data/textures/ui_knight.png", 4);
   uiTextures.zombiePortrait         = loadTexture("data/textures/ui_zombie.png", 4);
-  uiTextures.armoredZombiePortrait  = loadTexture("data/textures/ui_armoredzombie.png", 4);
+  uiTextures.armoredZombiePortrait  = loadTexture("data/textures/ui_armored_zombie.png", 4);
   uiTextures.chargerPortrait        = loadTexture("data/textures/ui_corredor.png", 4);
   uiTextures.necromancerPortrait    = loadTexture("data/textures/ui_necromancer.png", 4);
   uiTextures.archerUpIcon[0]   = loadTexture("data/textures/archerup1.png", 4);
@@ -558,9 +558,9 @@ int run(GLFWwindow *window) {
   enemyBase.loadAnimation("run",   "data/models/zombie/zombie_run.glb");
   enemyBase.loadAnimation("death", "data/models/zombie/zombie_death.glb");
 
-  AnimatedModel armoredZombieBase("data/models/armoredzombie/armoredzombie.glb");
-  armoredZombieBase.loadAnimation("run",   "data/models/armoredzombie/armoredzombie_walk.glb");
-  armoredZombieBase.loadAnimation("death", "data/models/armoredzombie/armoredzombie_death.glb");
+  AnimatedModel armoredZombieBase("data/models/armored_zombie/armored_zombie.glb");
+  armoredZombieBase.loadAnimation("run",   "data/models/armored_zombie/armored_zombie_walk.glb");
+  armoredZombieBase.loadAnimation("death", "data/models/armored_zombie/armored_zombie_death.glb");
 
   // Charger: walk → scream (50% HP) → run rápido; death reciclado do zumbi normal
   AnimatedModel chargerBase("data/models/charger/charger_t.glb");

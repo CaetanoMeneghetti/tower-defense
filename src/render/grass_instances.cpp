@@ -5,11 +5,13 @@
 #include <vector>
 
 #include <glad/glad.h>
-#include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
 #include "game/path_navigation.h"
 #include "math/constants.h"
+#include "math/matrix_ops.h"
+#include "math/opengl_utils.h"
+#include "math/transforms.h"
 
 GrassField buildGrassField(GLuint shader, GLuint texture,
                            const std::vector<Point> &curvePoints,
@@ -60,11 +62,16 @@ GrassField buildGrassField(GLuint shader, GLuint texture,
 
       float s = baseScale * scaleDist(rng);
       float r = rotDist(rng);
-      glm::mat4 m = glm::translate(glm::mat4(1.0f), glm::vec3(x, 0.0f, z));
-      m = glm::rotate(m, r, glm::vec3(0.0f, 1.0f, 0.0f));
-      m = glm::scale(m, glm::vec3(s));
-      matrices.push_back(m);
-      normalMatrices.push_back(glm::mat3(glm::transpose(glm::inverse(m))));
+
+      // Model matrix com a biblioteca de matrizes própria (math/), mesmo caminho
+      // usado para as árvores em setupTreeInstancing: m = T * Ry(r) * S(s).
+      // toOpenGLMatrix transpõe para o layout coluna-maior que o OpenGL espera.
+      Matrix<4, 4> m = translate<4, 4>(x, 0.0f, z) *
+                       rotateY<4, 4>(r) *
+                       scale<4, 4>(s, s, s);
+      glm::mat4 glModel = glm::make_mat4(toOpenGLMatrix(m).data());
+      matrices.push_back(glModel);
+      normalMatrices.push_back(glm::mat3(glm::transpose(glm::inverse(glModel))));
     }
   }
 

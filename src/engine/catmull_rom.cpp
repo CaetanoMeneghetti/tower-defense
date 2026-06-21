@@ -45,7 +45,8 @@ std::vector<Point> generateCatmullRomVertices(const std::vector<Point> &controlP
 
       Point p;
 
-      // [https://pt.scribd.com/document/331142118/Catmull-Rom-Spline]
+      // FONTE: fórmula da spline Catmull-Rom adaptada de
+      // https://pt.scribd.com/document/331142118/Catmull-Rom-Spline
       p.x = 0.5f * ((2.0f * p1.x) + (-p0.x + p2.x) * t +
                     (2.0f * p0.x - 5.0f * p1.x + 4.0f * p2.x - p3.x) * t2 +
                     (-p0.x + 3.0f * p1.x - 3.0f * p2.x + p3.x) * t3);

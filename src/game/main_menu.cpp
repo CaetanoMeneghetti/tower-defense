@@ -96,39 +96,19 @@ glm::mat4 makeArqOffset() {
 
 // Knight sword offset — matches KnightWeaponTweaks defaults
 glm::mat4 makeSwordOffset() {
-  auto wTrans = [](float tx, float ty, float tz) {
-    glm::mat4 m(1.0f); m[3] = glm::vec4(tx, ty, tz, 1.0f); return m;
-  };
-  auto wRotX = [](float r) {
-    float c = std::cos(r), s = std::sin(r);
-    glm::mat4 m(1.0f); m[1][1]=c; m[2][1]=-s; m[1][2]=s; m[2][2]=c; return m;
-  };
-  auto wRotY = [](float r) {
-    float c = std::cos(r), s = std::sin(r);
-    glm::mat4 m(1.0f); m[0][0]=c; m[2][0]=s; m[0][2]=-s; m[2][2]=c; return m;
-  };
-  auto wRotZ = [](float r) {
-    float c = std::cos(r), s = std::sin(r);
-    glm::mat4 m(1.0f); m[0][0]=c; m[1][0]=-s; m[0][1]=s; m[1][1]=c; return m;
-  };
-  auto wScale = [](float s) { return glm::scale(glm::mat4(1.0f), glm::vec3(s)); };
-
-  return wTrans(31.25f, -6.25f, -37.5f)
-       * wRotX(-0.196f) * wRotY(-0.589f) * wRotZ(1.374f)
-       * wScale(128.031f);
+  Matrix<4, 4> m = translate<4, 4>(31.25f, -6.25f, -37.5f) *
+                   rotateX<4, 4>(-0.196f) *
+                   rotateY<4, 4>(-0.589f) *
+                   rotateZ<4, 4>(1.374f) *
+                   scale<4, 4>(128.031f, 128.031f, 128.031f);
+  return glm::make_mat4(toOpenGLMatrix(m).data());
 }
 
 glm::mat4 makeShieldOffset() {
-  auto wTrans = [](float tx, float ty, float tz) {
-    glm::mat4 m(1.0f); m[3] = glm::vec4(tx, ty, tz, 1.0f); return m;
-  };
-  auto wRotY = [](float r) {
-    float c = std::cos(r), s = std::sin(r);
-    glm::mat4 m(1.0f); m[0][0]=c; m[2][0]=s; m[0][2]=-s; m[2][2]=c; return m;
-  };
-  auto wScale = [](float s) { return glm::scale(glm::mat4(1.0f), glm::vec3(s)); };
-
-  return wTrans(3.75f, -43.75f, -8.75f) * wRotY(2.454f) * wScale(180.0f);
+  Matrix<4, 4> m = translate<4, 4>(3.75f, -43.75f, -8.75f) *
+                   rotateY<4, 4>(2.454f) *
+                   scale<4, 4>(180.0f, 180.0f, 180.0f);
+  return glm::make_mat4(toOpenGLMatrix(m).data());
 }
 
 // Animated grass instances helper (same as before)
