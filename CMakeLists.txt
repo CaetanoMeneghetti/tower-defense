@@ -21,7 +21,7 @@ set(SOURCES
   src/engine/shader_program.cpp
   src/engine/texture_loader.cpp
   src/engine/audio.cpp
-  
+
 
   # game — regras de jogo (combate, placement, geração de cena)
   src/game/arrow_system.cpp
@@ -150,6 +150,10 @@ endif()
 FetchContent_MakeAvailable(assimp)
 
 add_executable(${EXECUTABLE_NAME} ${SOURCES})
+
+# Otimização: aplica -O2 SÓ ao jogo, não à assimp (que compila com -Werror e
+# acusa avisos novos sob -O2)
+target_compile_options(${EXECUTABLE_NAME} PRIVATE -O2)
 
 add_custom_command(TARGET ${EXECUTABLE_NAME} POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_directory
