@@ -54,7 +54,7 @@ constexpr float kLanternPathOffset = 3.2f;
 // BBox do OBJ: Y ∈ [-5, 85]cm; bulbo no meio ~ y=45cm → 0.9 world units.
 constexpr float kLanternLightHeight = 0.9f;
 // Laranja quente; valores > 1 para a luz "estourar" sobre o ambient noturno.
-inline const glm::vec3 kLanternLightColor = glm::vec3(1.8f, 1.05f, 0.40f);
+inline const glm::vec3 kLanternLightColor = glm::vec3(2.8f, 1.6f, 0.55f);
 
 // ---- Combate ----
 //Arqueiro

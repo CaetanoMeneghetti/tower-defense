@@ -171,6 +171,30 @@ Resultado: Praticamente todas as mudanças desse commit.
 
 ---
 
-**PROMPT:** Crie um menu de compra usando a tecla M, onde existem as abas para compra de feitiços e aliados; crie uma legenda de atalhos no canto inferior esquerdo. Detalhes: feitiço só pode ser desenhado na câmera aérea; frase indicando comando F (para desenho do feitiço) só fica ativa na câmera aérea, tanto como funcionalidade quanto como cor (fica cinza quanto inativo); quando está no menu de compra o mouse não deve conseguir mexer a câmera. Remova o que for obsoleto.
+**PROMPT**: Tem algo que podemos fazer para diminuir o impacto na grama do fps? Implemente GPU instancing para a grama: colapsar os N draw calls por blade em um único glDrawElementsInstanced. Além disso, o shader calcula mat3(transpose(inverse(model))) por vértice — elimine esse custo pré-computando a normal matrix no CPU e subindo como segundo atributo de instância.
+
+Resultado: GrassField ganhou instanceVBO e normalVBO carregados em buildGrassField com glBufferData(GL_STATIC_DRAW). AnimatedModel recebeu setupInstanceBuffer (locations 7–10 para mat4) e setupNormalBuffer (locations 11–13 para mat3) com glVertexAttribDivisor(1), e drawInstanced que chama glDrawElementsInstanced. O grass_sway.vert substituiu uniform mat4 model por layout(location=7) in mat4 instanceModel e layout(location=11) in mat3 instanceNormal, eliminando o inverse() por vértice. renderGrassField passou a chamar drawInstanced uma única vez.
+
+---
+
+**PROMPT**: Se a vida do jogador chegar a 0, escreve na tela bem grande "DERROTA!" com uma faixa cinza transparente estreita, e dai force todos os defensores a usarem a animação de defeat. Se for vitória, escreva "VITÓRIA!" com a mesma faixa e dai faça eles usarem victory2 em loop. Também use a musica victory ou defeat dependendo do caso e coloque um countdown "Voltando ao menu em 30 segundos... (aperte Y para retornar)".
+
+Resultado: Enum GameResult {None, Defeat, Victory} com float endCountdown e bool endAnimSet. Derrota detectada em state.health <= 0, vitória em WavePhase::Victory — ambas param a música atual e tocam defeat.mp3/victory.mp3. O bloco endAnimSet força setAnimation("defeat", false) ou setAnimation("victory2", true) em todos os defenders uma única vez. O overlay ImGui usa uma janela sem borda (bandH=160px, alpha=0.62) com SetWindowFontScale(3.2f) para o texto principal em vermelho/dourado e texto secundário com countdown em ceil(endCountdown). Y ou timer=0 chama glfwSetWindowShouldClose.
+
+---
+
+**PROMPT**: O comandante quando soltar sua ação de command deve mirar no zumbi mais próximo.
+
+Resultado: Em defender_system.cpp, antes de setAnimation("command"), um loop varre todos os enemies[ei].alive calculando dx²+dz² e aplica unit.rotationY = -atan2(dx, dz) ao menor valor encontrado.
+
+---
+
+**PROMPT**: Crie um menu de compra usando a tecla M, onde existem as abas para compra de feitiços e aliados; crie uma legenda de atalhos no canto inferior esquerdo. Detalhes: feitiço só pode ser desenhado na câmera aérea; frase indicando comando F (para desenho do feitiço) só fica ativa na câmera aérea, tanto como funcionalidade quanto como cor (fica cinza quanto inativo); quando está no menu de compra o mouse não deve conseguir mexer a câmera. Remova o que for obsoleto.
 
 Resultado: Contribuiu parcial ou totalmente para o código das funções Hud::renderBuyMenu(), Hud::renderControlsLegend(), drawSpellIcon(), Hud::setupStyle(), Hud::renderTopBar(), Hud::renderWaveBar(), Hud::render(), Hud::renderSpellBar(), spell::render() e drawTroopDetailsHud().
+
+---
+
+**PROMPT**: Faça a grama viva ficar iluminada pelas lanternas. Crie os 2 shaders de forma semelhante à iluminação feita para os outros objetos. Atente-se que a grama é double-sided.
+
+Resultado: Criou grass_sway.frag e grass_sway.vert. 

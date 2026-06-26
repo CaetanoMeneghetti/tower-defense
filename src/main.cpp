@@ -810,23 +810,14 @@ Mesh shield3Mesh(shield3Vertices.empty() ? shield2Vertices.empty() ? shieldVerti
   PathCache curveCache = buildPathCache(curvePoints);
   Mesh pathMesh = generatePathMesh(curvePoints, 2.0f);
 
-  std::unique_ptr<AnimatedModel> grassInstanceModel;
   GrassField grassField;
   if constexpr (kEnableGrass) {
-    grassInstanceModel = std::make_unique<AnimatedModel>("data/models/world/grass.glb");
     grassField = buildGrassField(
         pipe.grassSwayShader, tex.grass.color,
         curvePoints,
         /*pathClearance=*/2.2f,
-        // Área QUADRADA: o decaimento radial (em buildGrassField) dissolve a grama
-        // num círculo de raio = a meia-dimensão, então não há borda quadrada visível.
-        // A grama tem 3138 tris/instância, então o custo é dominado pela QUANTIDADE
-        // de instâncias — touceiras maiores (scale) e mais espaçadas (spacing) cobrem
-        // a área com menos instâncias. Ajuste fino: menor spacing = mais densa/pesada.
-        /*areaHalfX=*/54.0f, /*areaHalfZ=*/54.0f,
-        /*spacing=*/0.85f, /*baseScale=*/0.75f);
-    grassInstanceModel->setupInstanceBuffer(grassField.instanceVBO);
-    grassInstanceModel->setupNormalBuffer(grassField.normalVBO);
+        /*areaHalfX=*/32.0f, /*areaHalfZ=*/22.0f,
+        /*spacing=*/0.55f, /*baseScale=*/0.55f);
   }
 
   std::vector<TreeInstance> trees = placeTrees(curvePoints);
@@ -1384,12 +1375,13 @@ Mesh shield3Mesh(shield3Vertices.empty() ? shield2Vertices.empty() ? shieldVerti
 
     // ------- RENDER: grama com balanço -------
     if constexpr (kEnableGrass) {
-      renderGrassField(grassField, *grassInstanceModel, animTime,
+      renderGrassField(grassField, animTime,
                        moonLight.direction, moonLight.ambient, moonLight.diffuse,
                        kFogColor, kFogStart, kFogEnd,
                        glmViewPos,
                        glm::make_mat4(glView.data()),
-                       glm::make_mat4(glProj.data()));
+                       glm::make_mat4(glProj.data()),
+                       allLights);
     }
 
     // ------- RENDER: círculo de range (azul) -------

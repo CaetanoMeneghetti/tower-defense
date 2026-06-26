@@ -84,9 +84,9 @@ Aperte **C** para alternar entre Livre e Aérea. Para sair da Orbital, clique co
 
 O projeto usa **CMake**. As bibliotecas GLFW, GLM, Dear ImGui e miniaudio já vêm junto no repositório; o **Assimp** é baixado automaticamente pelo CMake na primeira configuração, então a primeira compilação precisa de **conexão com a internet** e demora um pouco mais.
 
-> ⚠️ **Assets (modelos 3D e texturas).** A pasta `data/` não está neste repositório por questão de direitos de imagem: os modelos e texturas são propriedade intelectual da SEGA / Creative Assembly (extraídos do *Total War: Medieval II*), e sua redistribuição pública é proibida. Por isso ela é mantida em um repositório **privado** separado, **[`1346AD-tower-defense-assets`](https://github.com/FernandoTedesco/1346AD-tower-defense-assets)**.
+> ⚠️ **Assets (modelos 3D e texturas).** A pasta `data/` está apenas com `shaders/` neste repositório por questão de direitos de imagem: os modelos e texturas são propriedade intelectual da SEGA / Creative Assembly (extraídos do *Total War: Medieval II*), e sua redistribuição pública é proibida. Por isso ela é mantida em um repositório **privado** separado, **[`1346AD-tower-defense-assets`](https://github.com/FernandoTedesco/1346AD-tower-defense-assets)**.
 >
-> Para rodar o jogo completo, basta obter a pasta `data/` desse repositório e colocá-la na raiz do projeto (ao lado de `src/`, `include/` e `CMakeLists.txt`). O acesso é concedido **mediante solicitação**. Como alternativa, é possível extrair os assets manualmente do jogo original seguindo o guia mais abaixo.
+> Para rodar o jogo completo, basta substituir a pasta `data/` atual pela encontrar no repositório citado, mantendo ela na raiz do projeto (ao lado de `src/`, `include/` e `CMakeLists.txt`). O acesso é concedido **mediante solicitação**. 
 
 ### Linux
 No terminal, dentro da pasta do projeto:

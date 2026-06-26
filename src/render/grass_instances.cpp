@@ -7,6 +7,12 @@
 #include <glad/glad.h>
 #include <glm/gtc/type_ptr.hpp>
 
+#include <assimp/Importer.hpp>
+#include <assimp/postprocess.h>
+#include <assimp/scene.h>
+
+#include "engine/lighting.h"
+#include "engine/obj_loader.h"
 #include "game/path_navigation.h"
 #include "math/constants.h"
 #include "math/matrix_ops.h"
@@ -22,22 +28,60 @@ GrassField buildGrassField(GLuint shader, GLuint texture,
   field.shader  = shader;
   field.texture = texture;
 
+  // ---- Carregar mesh do grass.glb via assimp ----
+  std::vector<Vertex> verts;
+  {
+    Assimp::Importer imp;
+    const aiScene *sc = imp.ReadFile("data/models/world/grass.glb",
+        aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_FlipUVs);
+    if (sc && !(sc->mFlags & AI_SCENE_FLAGS_INCOMPLETE) && sc->mRootNode) {
+      for (unsigned int m = 0; m < sc->mNumMeshes; ++m) {
+        aiMesh *mesh = sc->mMeshes[m];
+        for (unsigned int f = 0; f < mesh->mNumFaces; ++f) {
+          const aiFace &face = mesh->mFaces[f];
+          for (unsigned int fi = 0; fi < face.mNumIndices; ++fi) {
+            unsigned int idx = face.mIndices[fi];
+            Vertex v;
+            v.position  = { mesh->mVertices[idx].x, mesh->mVertices[idx].y, mesh->mVertices[idx].z };
+            v.texcoords = mesh->mTextureCoords[0]
+                ? Vec2{ mesh->mTextureCoords[0][idx].x, mesh->mTextureCoords[0][idx].y }
+                : Vec2{ 0.0f, 0.0f };
+            v.normal    = mesh->mNormals
+                ? Vec3{ mesh->mNormals[idx].x, mesh->mNormals[idx].y, mesh->mNormals[idx].z }
+                : Vec3{ 0.0f, 1.0f, 0.0f };
+            verts.push_back(v);
+          }
+        }
+      }
+    }
+  }
+  field.vertexCount = static_cast<int>(verts.size());
+
+  glGenVertexArrays(1, &field.meshVAO);
+  glGenBuffers(1, &field.meshVBO);
+  glBindVertexArray(field.meshVAO);
+
+  glBindBuffer(GL_ARRAY_BUFFER, field.meshVBO);
+  glBufferData(GL_ARRAY_BUFFER, verts.size() * sizeof(Vertex), verts.data(), GL_STATIC_DRAW);
+
+  glEnableVertexAttribArray(0);
+  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex),
+                        (void*)offsetof(Vertex, position));
+  glEnableVertexAttribArray(1);
+  glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex),
+                        (void*)offsetof(Vertex, texcoords));
+  glEnableVertexAttribArray(2);
+  glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex),
+                        (void*)offsetof(Vertex, normal));
+
+  // ---- Gerar matrizes de instância (mesmo padrão do stash: grid simples) ----
   std::mt19937 rng(42);
   std::uniform_real_distribution<float> jitterDist(-spacing * 0.45f, spacing * 0.45f);
   std::uniform_real_distribution<float> rotDist(0.0f, math_constants::kTwoPi);
   std::uniform_real_distribution<float> scaleDist(0.55f, 0.85f);
-  std::uniform_real_distribution<float> keepDist(0.0f, 1.0f);
 
   const int stepsX = static_cast<int>(areaHalfX / spacing);
   const int stepsZ = static_cast<int>(areaHalfZ / spacing);
-
-  // Decaimento RADIAL e CONTÍNUO a partir do centro do mapa (0,0): densidade cheia
-  // só num núcleo e some suavemente (smoothstep) até zero no raio INSCRITO na área
-  // (a menor meia-dimensão). Como o zero é atingido antes da borda do retângulo, a
-  // grama vira um círculo que se dissolve — sem a borda dura/quadrada de antes.
-  const float falloffRadius = (areaHalfX < areaHalfZ) ? areaHalfX : areaHalfZ;
-  const float fullRadius    = falloffRadius * 0.40f;
-  const float fallSpan      = falloffRadius - fullRadius;
 
   std::vector<glm::mat4> matrices;
   std::vector<glm::mat3> normalMatrices;
@@ -49,16 +93,6 @@ GrassField buildGrassField(GLuint shader, GLuint texture,
       float x = i * spacing + jitterDist(rng);
       float z = j * spacing + jitterDist(rng);
       if (distanceToPath(curvePoints, x, z) < pathClearance) continue;
-
-      // Densidade decai suavemente do centro até zero no raio de falloff (smoothstep).
-      const float radius = std::sqrt(x * x + z * z);
-      float keepProb = 1.0f;
-      if (radius > fullRadius) {
-        float t = (radius - fullRadius) / fallSpan;      // 0 no núcleo → 1 no falloff
-        t = t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
-        keepProb = 1.0f - t * t * (3.0f - 2.0f * t);     // smoothstep invertido: 1→0 suave
-      }
-      if (keepProb <= 0.0f || keepDist(rng) > keepProb) continue;
 
       float s = baseScale * scaleDist(rng);
       float r = rotDist(rng);
@@ -79,54 +113,62 @@ GrassField buildGrassField(GLuint shader, GLuint texture,
 
   glGenBuffers(1, &field.instanceVBO);
   glBindBuffer(GL_ARRAY_BUFFER, field.instanceVBO);
-  glBufferData(GL_ARRAY_BUFFER,
-               field.instanceCount * sizeof(glm::mat4),
+  glBufferData(GL_ARRAY_BUFFER, field.instanceCount * sizeof(glm::mat4),
                matrices.data(), GL_STATIC_DRAW);
+  for (int k = 0; k < 4; ++k) {
+    glEnableVertexAttribArray(3 + k);
+    glVertexAttribPointer(3 + k, 4, GL_FLOAT, GL_FALSE, sizeof(glm::mat4),
+                          (void*)(k * sizeof(glm::vec4)));
+    glVertexAttribDivisor(3 + k, 1);
+  }
 
   glGenBuffers(1, &field.normalVBO);
   glBindBuffer(GL_ARRAY_BUFFER, field.normalVBO);
-  glBufferData(GL_ARRAY_BUFFER,
-               field.instanceCount * sizeof(glm::mat3),
+  glBufferData(GL_ARRAY_BUFFER, field.instanceCount * sizeof(glm::mat3),
                normalMatrices.data(), GL_STATIC_DRAW);
+  for (int k = 0; k < 3; ++k) {
+    glEnableVertexAttribArray(7 + k);
+    glVertexAttribPointer(7 + k, 3, GL_FLOAT, GL_FALSE, sizeof(glm::mat3),
+                          (void*)(k * sizeof(glm::vec3)));
+    glVertexAttribDivisor(7 + k, 1);
+  }
 
-  glBindBuffer(GL_ARRAY_BUFFER, 0);
-
+  glBindVertexArray(0);
   return field;
 }
 
-void renderGrassField(const GrassField &field,
-                      AnimatedModel    &model,
-                      float             time,
-                      const glm::vec3  &lightDir,
-                      const glm::vec3  &lightAmbient,
-                      const glm::vec3  &lightDiffuse,
-                      const glm::vec3  &fogColor,
-                      float             fogStart,
-                      float             fogEnd,
-                      const glm::vec3  &viewPos,
-                      const glm::mat4  &view,
-                      const glm::mat4  &proj) {
-  glUseProgram(field.shader);
+void renderGrassField(const GrassField              &field,
+                      float                          time,
+                      const glm::vec3               &lightDir,
+                      const glm::vec3               &lightAmbient,
+                      const glm::vec3               &lightDiffuse,
+                      const glm::vec3               &fogColor,
+                      float                          fogStart,
+                      float                          fogEnd,
+                      const glm::vec3               &viewPos,
+                      const glm::mat4               &view,
+                      const glm::mat4               &proj,
+                      const std::vector<PointLight> &pointLights) {
+  if (field.instanceCount == 0 || field.vertexCount == 0) return;
 
-  glUniform1f(glGetUniformLocation(field.shader, "time"),         time);
+  glUseProgram(field.shader);
+  glUniform1f(glGetUniformLocation(field.shader, "time"),            time);
   glUniformMatrix4fv(glGetUniformLocation(field.shader, "view"),       1, GL_FALSE, glm::value_ptr(view));
   glUniformMatrix4fv(glGetUniformLocation(field.shader, "projection"), 1, GL_FALSE, glm::value_ptr(proj));
-  glUniform3fv(glGetUniformLocation(field.shader, "lightDir"),     1, glm::value_ptr(lightDir));
-  glUniform3fv(glGetUniformLocation(field.shader, "lightAmbient"), 1, glm::value_ptr(lightAmbient));
-  glUniform3fv(glGetUniformLocation(field.shader, "lightDiffuse"), 1, glm::value_ptr(lightDiffuse));
-  glUniform3fv(glGetUniformLocation(field.shader, "fogColor"),     1, glm::value_ptr(fogColor));
-  glUniform1f(glGetUniformLocation(field.shader, "fogStart"),      fogStart);
-  glUniform1f(glGetUniformLocation(field.shader, "fogEnd"),        fogEnd);
-  glUniform3fv(glGetUniformLocation(field.shader, "viewPos"),      1, glm::value_ptr(viewPos));
+  glUniform3fv(glGetUniformLocation(field.shader, "lightDir"),       1, glm::value_ptr(lightDir));
+  glUniform3fv(glGetUniformLocation(field.shader, "lightAmbient"),   1, glm::value_ptr(lightAmbient));
+  glUniform3fv(glGetUniformLocation(field.shader, "lightDiffuse"),   1, glm::value_ptr(lightDiffuse));
+  glUniform3fv(glGetUniformLocation(field.shader, "fogColor"),       1, glm::value_ptr(fogColor));
+  glUniform1f(glGetUniformLocation(field.shader, "fogStart"),        fogStart);
+  glUniform1f(glGetUniformLocation(field.shader, "fogEnd"),          fogEnd);
+  glUniform3fv(glGetUniformLocation(field.shader, "viewPos"),        1, glm::value_ptr(viewPos));
+  applyPointLights(field.shader, pointLights);
 
   glActiveTexture(GL_TEXTURE0);
   glBindTexture(GL_TEXTURE_2D, field.texture);
   glUniform1i(glGetUniformLocation(field.shader, "tex"), 0);
 
-  glEnable(GL_BLEND);
-  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-  model.drawInstanced(field.instanceCount);
-
-  glDisable(GL_BLEND);
+  glBindVertexArray(field.meshVAO);
+  glDrawArraysInstanced(GL_TRIANGLES, 0, field.vertexCount, field.instanceCount);
+  glBindVertexArray(0);
 }
