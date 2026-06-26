@@ -75,7 +75,7 @@ std::vector<glm::mat4> AnimatedModel::getTransformsAtTime(const std::string &ani
   const aiAnimation *animation = nullptr;
   if (animations_.count(animName)) {
     animation = animations_[animName]->mAnimations[0];
-  } else if (scene_->HasAnimations()) {
+  } else if (scene_ && scene_->HasAnimations()) {
     animation = scene_->mAnimations[0];
   }
 

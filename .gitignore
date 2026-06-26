@@ -1,4 +1,5 @@
 bin
 build
 .vscode
-data/
+data/*
+!data/shaders/
